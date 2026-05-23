@@ -170,26 +170,12 @@ namespace MoveDoors
                 baselineMeshes[key] = baseline;
             }
 
-            // Mesh-vs-hitbox alignment: cuboids live in world space (and our ColSelBoxes postfix
-            // translates them directly by world offset). Mesh data lives in mesh-local space, and
-            // the renderer rotates the mesh by RotateYRad around the Y axis before placing it at
-            // the BE's pos. So a direct mesh.Translate(world_offset) would put the visual at the
-            // wrong world position for any non-north-facing door (anything with RotateYRad != 0).
-            // Pre-apply the inverse rotation so that after the renderer's forward rotation the
-            // visual ends up exactly aligned with the hitbox.
-            var rotateField = AccessTools.Field(type, "RotateYRad");
-            float angle = rotateField?.GetValue(__instance) is float r ? r : 0f;
-            float cos = (float)Math.Cos(angle);
-            float sin = (float)Math.Sin(angle);
-
-            float worldDx = off.X / 16f;
-            float worldDy = off.Y / 16f;
-            float worldDz = off.Z / 16f;
-            float meshDx = worldDx * cos - worldDz * sin;
-            float meshDz = worldDx * sin + worldDz * cos;
-
+            // Translate the mesh by the same world-space vector as the hitbox cuboids. Whatever
+            // VS's renderer does on top of this (rotation, animation, chunk batching) is its own
+            // business — if both meshes and cuboids enter the pipeline pre-translated by the same
+            // vector, they should end up co-located.
             var translated = baseline.Clone();
-            translated.Translate(meshDx, worldDy, meshDz);
+            translated.Translate(off.X / 16f, off.Y / 16f, off.Z / 16f);
             meshField.SetValue(__instance, translated);
         }
     }
