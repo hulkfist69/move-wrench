@@ -32,8 +32,10 @@ namespace MoveDoors
             if (world.Side == EnumAppSide.Client)
             {
                 int step = MoveDoorsModSystem.GetClientStep();
+                var capi = world.Api as ICoreClientAPI;
+                capi?.ShowChatMessage("[movedoors] wrench fired on " + block.Code + " step=" + step + (reset ? " RESET" : ""));
                 MoveDoorsModSystem.Offsets?.ClientSendInteract(blockSel.Position, face, reset, step);
-                (world.Api as ICoreClientAPI)?.World.Player.TriggerFpAnimation(EnumHandInteract.HeldItemInteract);
+                capi?.World.Player.TriggerFpAnimation(EnumHandInteract.HeldItemInteract);
             }
 
             handling = EnumHandHandling.PreventDefault;

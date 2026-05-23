@@ -32,6 +32,12 @@ namespace MoveDoors
             harmony = new Harmony(HarmonyId);
             harmony.PatchAll(typeof(MoveDoorsModSystem).Assembly);
             RuntimePatches.Apply(harmony, api.Logger);
+
+            // Dump what actually got patched, so we can tell from the log whether the prefixes wired up.
+            foreach (var m in harmony.GetPatchedMethods())
+            {
+                api.Logger.Notification("[movedoors] patched method: " + m.DeclaringType?.FullName + "." + m.Name);
+            }
         }
 
         public override void StartServerSide(ICoreServerAPI sapi)

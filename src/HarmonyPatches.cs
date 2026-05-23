@@ -70,10 +70,7 @@ namespace MoveDoors
         }
     }
 
-    // Global short-circuit on Block.OnBlockInteractStart: if the player holds our wrench and
-    // is targeting a movable block, skip the block's entire interact pipeline (including its
-    // behavior chain — which is where the door's open logic actually lives in VS 1.20).
-    // This is the single point that controls who gets the right-click.
+    // Global short-circuit on Block.OnBlockInteractStart.
     [HarmonyPatch(typeof(Block), nameof(Block.OnBlockInteractStart))]
     public static class Patch_Block_OnBlockInteractStart
     {
@@ -82,8 +79,37 @@ namespace MoveDoors
             if (!WrenchHeld.IsHolding(byPlayer)) return true;
             if (!BlockOffsetManager.IsMovable(__instance)) return true;
 
-            __result = false; // signals "I didn't handle it" → control falls through to the held item
-            return false;     // skip original (and its behavior chain)
+            (byPlayer as Vintagestory.API.Server.IServerPlayer)?.SendMessage(
+                Vintagestory.API.Config.GlobalConstants.GeneralChatGroup,
+                "[movedoors] suppressed " + __instance.GetType().Name + " interact",
+                Vintagestory.API.Common.EnumChatType.Notification);
+
+            __result = false;
+            return false;
+        }
+    }
+
+    // Belt-and-braces: BlockDoor often overrides OnBlockInteractStart, so the base-class patch
+    // above may not fire for door instances. Patch the override directly too.
+    [HarmonyPatch(typeof(BlockDoor), nameof(BlockDoor.OnBlockInteractStart))]
+    public static class Patch_BlockDoor_OnBlockInteractStart_Override
+    {
+        public static bool Prefix(IPlayer byPlayer, ref bool __result)
+        {
+            if (!WrenchHeld.IsHolding(byPlayer)) return true;
+            __result = false;
+            return false;
+        }
+    }
+
+    [HarmonyPatch(typeof(BlockFenceGate), nameof(BlockFenceGate.OnBlockInteractStart))]
+    public static class Patch_BlockFenceGate_OnBlockInteractStart_Override
+    {
+        public static bool Prefix(IPlayer byPlayer, ref bool __result)
+        {
+            if (!WrenchHeld.IsHolding(byPlayer)) return true;
+            __result = false;
+            return false;
         }
     }
 
