@@ -70,36 +70,23 @@ namespace MoveDoors
         }
     }
 
-    // Suppress the block's own right-click handler when the player is holding the wrench.
-    // Otherwise the door opens/closes before our item handler runs.
-    [HarmonyPatch(typeof(BlockDoor), nameof(BlockDoor.OnBlockInteractStart))]
-    public static class Patch_BlockDoor_OnBlockInteractStart
+    // Global short-circuit on Block.OnBlockInteractStart: if the player holds our wrench and
+    // is targeting a movable block, skip the block's entire interact pipeline (including its
+    // behavior chain — which is where the door's open logic actually lives in VS 1.20).
+    // This is the single point that controls who gets the right-click.
+    [HarmonyPatch(typeof(Block), nameof(Block.OnBlockInteractStart))]
+    public static class Patch_Block_OnBlockInteractStart
     {
-        public static bool Prefix(IPlayer byPlayer, ref bool __result)
+        public static bool Prefix(Block __instance, IPlayer byPlayer, ref bool __result)
         {
-            if (WrenchHeld.IsHolding(byPlayer))
-            {
-                __result = false;
-                return false; // skip original
-            }
-            return true;
+            if (!WrenchHeld.IsHolding(byPlayer)) return true;
+            if (!BlockOffsetManager.IsMovable(__instance)) return true;
+
+            __result = false; // signals "I didn't handle it" → control falls through to the held item
+            return false;     // skip original (and its behavior chain)
         }
     }
 
-    [HarmonyPatch(typeof(BlockFenceGate), nameof(BlockFenceGate.OnBlockInteractStart))]
-    public static class Patch_BlockFenceGate_OnBlockInteractStart
-    {
-        public static bool Prefix(IPlayer byPlayer, ref bool __result)
-        {
-            if (WrenchHeld.IsHolding(byPlayer))
-            {
-                __result = false;
-                return false;
-            }
-            return true;
-        }
-    }
-
-    // NOTE: Trapdoor interact suppression + door mesh translation are wired via runtime reflection
-    // in RuntimePatches.Apply(...) so the build doesn't fail when class names differ between VS versions.
+    // NOTE: Door mesh translation is wired via runtime reflection in RuntimePatches.Apply(...)
+    // so the build doesn't fail when BE class names differ between VS versions.
 }
