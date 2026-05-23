@@ -99,22 +99,22 @@ namespace MoveDoors
                     // One-time field dump so we can see the actual shape of the BE behavior.
                     DumpFields(type, logger);
 
-                    // Dump BlockEntityAnimationUtil — this is the door's render path; we need to
-                    // find a model-matrix or transform hook on it to apply world-space offset
-                    // at render time (the only way to truly align the texture with the hitbox).
-                    var animType = ResolveType("Vintagestory.API.Common.BlockEntityAnimationUtil");
-                    if (animType != null)
+                    // Get animUtil's type directly from the field, not by guessing namespace.
+                    var animUtilField = AccessTools.Field(type, "animUtil");
+                    if (animUtilField != null)
                     {
-                        logger.Notification("[movedoors] --- BlockEntityAnimationUtil structure ---");
+                        var animType = animUtilField.FieldType;
+                        logger.Notification("[movedoors] animUtil type: " + animType.FullName);
+                        logger.Notification("[movedoors] --- " + animType.Name + " structure ---");
                         DumpFields(animType, logger);
 
-                        // Also dump nested types that might hold the renderer.
                         foreach (var fi in animType.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
                         {
-                            if (fi.FieldType.Name.Contains("Renderer") || fi.FieldType.Name.Contains("Animator"))
+                            var ft = fi.FieldType;
+                            if (ft.Name.Contains("Renderer") || ft.Name.Contains("Animator") || ft.Name.Contains("Matrix"))
                             {
-                                logger.Notification("[movedoors] --- nested " + fi.FieldType.FullName + " ---");
-                                DumpFields(fi.FieldType, logger);
+                                logger.Notification("[movedoors] --- nested " + ft.FullName + " (via field " + fi.Name + ") ---");
+                                DumpFields(ft, logger);
                             }
                         }
                     }
