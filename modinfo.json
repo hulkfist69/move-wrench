@@ -2,7 +2,7 @@
   "type": "code",
   "name": "Move Wrench",
   "modid": "movedoors",
-  "version": "0.3.19",
+  "version": "0.3.20",
   "description": "Shift doors, trapdoors, and fence gates at sub-voxel precision with a wrench. Press F to pick a step size (1/2/4 voxels) in a chisel-style selector. Right-click a face to push the block away from that face; sneak + right-click to snap back to alignment. Paired (double) doors and two-tall doors move as a single group. Non-destructive — hitbox stays intact.",
   "authors": ["Cody"],
   "side": "Universal",

@@ -166,36 +166,43 @@ namespace MoveDoors
             BlockPos pos = AccessTools.Property(type, "Pos")?.GetValue(__instance) as BlockPos;
             if (pos == null) return;
 
-            var meshField = AccessTools.Field(type, "mesh");
-            if (meshField == null) return;
-            if (meshField.GetValue(__instance) is not MeshData currentMesh) return;
+            // STOP mutating the BE's mesh — we now apply the offset via the renderer's
+            // CustomTransform matrix instead. This is applied by the renderer as part of the
+            // normal render pipeline, so the offset rides along with all of VS's existing
+            // rotation/animation matrices and lands in world space matching the hitbox.
 
-            var openedField = AccessTools.Field(type, "opened");
-            bool opened = openedField?.GetValue(__instance) is bool ob && ob;
+            var animUtilField = AccessTools.Field(type, "animUtil");
+            var animUtil = animUtilField?.GetValue(__instance);
+            if (animUtil == null) return;
 
-            string key = pos.X + ":" + pos.Y + ":" + pos.Z + ":" + (opened ? "1" : "0");
+            var rendererField = AccessTools.Field(animUtil.GetType(), "renderer");
+            var renderer = rendererField?.GetValue(animUtil);
+            if (renderer == null) return;
+
+            var customField = AccessTools.Field(renderer.GetType(), "CustomTransform");
+            if (customField == null) return;
 
             var off = MoveDoorsModSystem.Offsets?.Get(pos);
             bool hasOffset = off != null && (off.X != 0 || off.Y != 0 || off.Z != 0);
 
             if (!hasOffset)
             {
-                baselineMeshes.Remove(key);
+                customField.SetValue(renderer, null);
                 return;
             }
 
-            if (!baselineMeshes.TryGetValue(key, out var baseline))
-            {
-                baseline = currentMesh.Clone();
-                baselineMeshes[key] = baseline;
-            }
+            float dx = off.X / 16f;
+            float dy = off.Y / 16f;
+            float dz = off.Z / 16f;
 
-            // v0.3.13 simple translation (no rotation correction). Works at least for closed
-            // north-facing. Other facings + open + animation are still off — fix in v0.4 will be
-            // to patch the renderer's model matrix instead of mutating mesh data.
-            var translated = baseline.Clone();
-            translated.Translate(off.X / 8f, off.Y / 8f, off.Z / 8f);
-            meshField.SetValue(__instance, translated);
+            // 4x4 translation matrix, column-major (OpenGL convention).
+            customField.SetValue(renderer, new float[]
+            {
+                1, 0, 0, 0,
+                0, 1, 0, 0,
+                0, 0, 1, 0,
+                dx, dy, dz, 1
+            });
         }
     }
 }
