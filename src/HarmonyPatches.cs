@@ -24,8 +24,7 @@ namespace MoveDoors
         }
     }
 
-    // ---- BlockDoor ----
-
+    // BlockDoor: collision + selection offset (compile-safe baseline).
     [HarmonyPatch(typeof(BlockDoor), nameof(BlockDoor.GetCollisionBoxes))]
     public static class Patch_BlockDoor_GetCollisionBoxes
     {
@@ -44,53 +43,7 @@ namespace MoveDoors
         }
     }
 
-    // Door BE mesh translation. We translate the cached mesh by the stored offset on each re-tess,
-    // so the rendered door tracks its shifted collision/selection.
-    [HarmonyPatch(typeof(BlockEntityDoor), "OnTesselation")]
-    public static class Patch_BlockEntityDoor_OnTesselation
-    {
-        public static void Postfix(BlockEntityDoor __instance)
-        {
-            var off = MoveDoorsModSystem.Offsets?.Get(__instance.Pos);
-            if (off == null || (off.X == 0 && off.Y == 0 && off.Z == 0)) return;
-
-            float dx = off.X / 16f, dy = off.Y / 16f, dz = off.Z / 16f;
-
-            // Try common cached-mesh field names. VS 1.20 BlockEntityDoor uses "mesh" for the
-            // generated MeshData. If the field name shifts in a point release, this no-ops gracefully.
-            var fld = AccessTools.Field(typeof(BlockEntityDoor), "mesh")
-                   ?? AccessTools.Field(typeof(BlockEntityDoor), "Mesh");
-            if (fld == null) return;
-
-            if (fld.GetValue(__instance) is MeshData md)
-            {
-                md.Translate(dx, dy, dz);
-            }
-        }
-    }
-
-    // ---- BlockTrapDoor ----
-
-    [HarmonyPatch(typeof(BlockTrapDoor), nameof(BlockTrapDoor.GetCollisionBoxes))]
-    public static class Patch_BlockTrapDoor_GetCollisionBoxes
-    {
-        public static void Postfix(IBlockAccessor blockAccessor, BlockPos pos, ref Cuboidf[] __result)
-        {
-            OffsetHelper.Apply(pos, ref __result);
-        }
-    }
-
-    [HarmonyPatch(typeof(BlockTrapDoor), nameof(BlockTrapDoor.GetSelectionBoxes))]
-    public static class Patch_BlockTrapDoor_GetSelectionBoxes
-    {
-        public static void Postfix(IBlockAccessor blockAccessor, BlockPos pos, ref Cuboidf[] __result)
-        {
-            OffsetHelper.Apply(pos, ref __result);
-        }
-    }
-
-    // ---- BlockFenceGate ----
-
+    // BlockFenceGate: collision + selection offset.
     [HarmonyPatch(typeof(BlockFenceGate), nameof(BlockFenceGate.GetCollisionBoxes))]
     public static class Patch_BlockFenceGate_GetCollisionBoxes
     {
@@ -108,4 +61,8 @@ namespace MoveDoors
             OffsetHelper.Apply(pos, ref __result);
         }
     }
+
+    // NOTE: Door visual mesh translation and trapdoor support are wired via runtime reflection in
+    // RuntimePatches.Apply(...) rather than [HarmonyPatch] attributes, so the build doesn't fail
+    // when class names differ between VS versions.
 }

@@ -31,6 +31,7 @@ namespace MoveDoors
 
             harmony = new Harmony(HarmonyId);
             harmony.PatchAll(typeof(MoveDoorsModSystem).Assembly);
+            RuntimePatches.Apply(harmony, api.Logger);
         }
 
         public override void StartServerSide(ICoreServerAPI sapi)
