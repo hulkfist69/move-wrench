@@ -29,7 +29,6 @@ namespace MoveDoors
         public override void Start(ICoreAPI api)
         {
             Logger = api.Logger;
-            api.RegisterItemClass("ItemDoorWrench", typeof(ItemDoorWrench));
 
             api.Logger.Notification("[movedoors] starting v" + BuildInfo.Version + " " + BuildInfo.Sha + " (" + BuildInfo.Stamp + ") side=" + api.Side);
 
@@ -72,8 +71,8 @@ namespace MoveDoors
         {
             if (capi == null) return false;
 
-            var active = capi.World.Player?.InventoryManager?.ActiveHotbarSlot?.Itemstack?.Item;
-            if (active is not ItemDoorWrench) return false;
+            // F only opens the picker when the player is holding a wrench.
+            if (!WrenchHeld.IsHolding(capi.World.Player)) return false;
 
             if (stepDialog == null) stepDialog = new GuiDialogMoveStep(capi);
             if (stepDialog.IsOpened()) stepDialog.TryClose();

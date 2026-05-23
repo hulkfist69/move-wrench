@@ -7,9 +7,24 @@ namespace MoveDoors
 {
     internal static class WrenchHeld
     {
+        // Matches the base game wrench (game:wrench) by item code, plus any item whose class
+        // (or an ancestor class) is named "ItemWrench" — that covers third-party mod wrenches
+        // that subclass the base wrench.
         public static bool IsHolding(IPlayer player)
         {
-            return player?.InventoryManager?.ActiveHotbarSlot?.Itemstack?.Item is ItemDoorWrench;
+            var item = player?.InventoryManager?.ActiveHotbarSlot?.Itemstack?.Item;
+            if (item == null) return false;
+
+            var code = item.Code?.ToString();
+            if (code == "game:wrench") return true;
+
+            var t = item.GetType();
+            while (t != null)
+            {
+                if (t.Name == "ItemWrench") return true;
+                t = t.BaseType;
+            }
+            return false;
         }
     }
 

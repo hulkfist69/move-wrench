@@ -5,6 +5,7 @@ using System.Reflection;
 using HarmonyLib;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.API.Common.Entities;
 using Vintagestory.API.MathTools;
 
 namespace MoveDoors
@@ -30,6 +31,58 @@ namespace MoveDoors
         {
             TryPatchDoorMesh(harmony, logger);
             TryPatchColSelBoxes(harmony, logger);
+            TryPatchWrenchInteract(harmony, logger);
+        }
+
+        private static void TryPatchWrenchInteract(Harmony harmony, ILogger logger)
+        {
+            try
+            {
+                var type = ResolveType("Vintagestory.GameContent.ItemWrench");
+                if (type == null)
+                {
+                    logger.Warning("[movedoors] ItemWrench class not found — base wrench integration disabled");
+                    return;
+                }
+                var method = AccessTools.Method(type, "OnHeldInteractStart");
+                if (method == null) return;
+
+                var prefix = new HarmonyMethod(typeof(RuntimePatches).GetMethod(nameof(WrenchInteractPrefix),
+                    BindingFlags.Static | BindingFlags.NonPublic));
+                harmony.Patch(method, prefix: prefix);
+                logger.Notification("[movedoors] patched ItemWrench.OnHeldInteractStart");
+            }
+            catch (Exception ex)
+            {
+                logger.Warning("[movedoors] TryPatchWrenchInteract failed: " + ex.Message);
+            }
+        }
+
+        // Prefix on the base game wrench's interact handler. If the player is targeting a
+        // movable block (door / trapdoor / fence gate), run our offset logic and skip vanilla
+        // wrench rotation. Otherwise let the wrench rotate as normal.
+        private static bool WrenchInteractPrefix(ItemSlot slot, EntityAgent byEntity,
+            BlockSelection blockSel, EntitySelection entitySel, bool firstEvent,
+            ref EnumHandHandling handling)
+        {
+            if (!firstEvent || blockSel == null) return true;
+
+            var world = byEntity.World;
+            var block = world.BlockAccessor.GetBlock(blockSel.Position);
+            if (!BlockOffsetManager.IsMovable(block)) return true;
+
+            bool reset = byEntity.Controls.Sneak;
+            var face = blockSel.Face ?? BlockFacing.UP;
+
+            if (world.Side == EnumAppSide.Client)
+            {
+                int step = MoveDoorsModSystem.GetClientStep();
+                MoveDoorsModSystem.Offsets?.ClientSendInteract(blockSel.Position, face, reset, step);
+                (world.Api as ICoreClientAPI)?.World.Player.TriggerFpAnimation(EnumHandInteract.HeldItemInteract);
+            }
+
+            handling = EnumHandHandling.PreventDefault;
+            return false;
         }
 
         private static void TryPatchColSelBoxes(Harmony harmony, ILogger logger)
