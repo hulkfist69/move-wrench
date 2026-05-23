@@ -293,12 +293,24 @@ namespace MoveDoors
             }
         }
 
+        private static bool firstRayTraceLogged = false;
+        private static int hitReplacementCount = 0;
+
         private static void RayTracePostfix(Vec3d fromPos, Vec3d toPos, ref BlockSelection blockSel, IBlockAccessor __instance)
         {
             try
             {
                 var mgr = MoveDoorsModSystem.Offsets;
-                if (mgr == null || mgr.Offsets.Count == 0) return;
+                if (mgr == null) return;
+
+                if (!firstRayTraceLogged)
+                {
+                    firstRayTraceLogged = true;
+                    MoveDoorsModSystem.Logger?.Notification("[movedoors] RayTracePostfix is firing on "
+                        + __instance.GetType().Name + " (offsets=" + mgr.Offsets.Count + ")");
+                }
+
+                if (mgr.Offsets.Count == 0) return;
                 if (fromPos == null || toPos == null || __instance == null) return;
 
                 double rayLen = toPos.SubCopy(fromPos).Length();
@@ -353,6 +365,13 @@ namespace MoveDoors
                             DidOffset = false,
                             Block = block
                         };
+
+                        if (hitReplacementCount < 5)
+                        {
+                            hitReplacementCount++;
+                            MoveDoorsModSystem.Logger?.Notification("[movedoors] retargeted ray-trace to shifted door at "
+                                + doorPos + " (face=" + face.Code + ", t=" + t.ToString("0.###") + ")");
+                        }
                     }
                 }
             }

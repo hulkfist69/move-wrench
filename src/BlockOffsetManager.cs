@@ -252,17 +252,39 @@ namespace MoveDoors
             Offsets.Clear();
 
             if (pkt?.Entries == null) return;
+            capi?.Logger.Notification("[movedoors] sync received with " + pkt.Entries.Length + " offsets");
             foreach (var e in pkt.Entries)
             {
                 var p = new BlockPos(e.X, e.Y, e.Z);
                 Offsets[p] = new Vec3i(e.OffX, e.OffY, e.OffZ);
                 capi?.World.BlockAccessor.MarkBlockDirty(p);
                 capi?.World.BlockAccessor.MarkBlockEntityDirty(p);
-                // Also apply the offset directly to whichever BE is already loaded at this pos.
-                // Fixes the "have to right-click every door after world reload" bug — chunks that
-                // were loaded before sync arrived won't re-tess on their own.
-                if (capi != null) RuntimePatches.ForceApplyAt(capi.World, p);
+                bool applied = false;
+                if (capi != null)
+                {
+                    var be = capi.World.BlockAccessor.GetBlockEntity(p);
+                    applied = be != null;
+                    RuntimePatches.ForceApplyAt(capi.World, p);
+                }
+                capi?.Logger.Notification("[movedoors] sync apply " + p + " off=(" + e.OffX + "," + e.OffY + "," + e.OffZ + ") beLoaded=" + applied);
             }
+
+            // Some chunks may finish loading after the sync packet arrives. Re-apply every offset
+            // after a short delay so late-loaded doors pick up their offset without manual click.
+            capi?.Event.RegisterCallback(dt =>
+            {
+                int reapplied = 0;
+                foreach (var kv in Offsets)
+                {
+                    if (capi.World.BlockAccessor.GetBlockEntity(kv.Key) != null)
+                    {
+                        RuntimePatches.ForceApplyAt(capi.World, kv.Key);
+                        capi.World.BlockAccessor.MarkBlockDirty(kv.Key);
+                        reapplied++;
+                    }
+                }
+                capi.Logger.Notification("[movedoors] delayed re-apply: " + reapplied + "/" + Offsets.Count + " offsets re-applied");
+            }, 3000);
         }
 
         private void OnUpdate(BlockOffsetUpdatePacket pkt)
