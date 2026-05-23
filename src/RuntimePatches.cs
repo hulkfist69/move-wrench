@@ -170,12 +170,13 @@ namespace MoveDoors
                 baselineMeshes[key] = baseline;
             }
 
-            // Translate the mesh by the same world-space vector as the hitbox cuboids. Whatever
-            // VS's renderer does on top of this (rotation, animation, chunk batching) is its own
-            // business — if both meshes and cuboids enter the pipeline pre-translated by the same
-            // vector, they should end up co-located.
+            // VS 1.22 door meshes use a coordinate scale where translation amounts in
+            // mesh-local units land at HALF the world distance after rendering. Empirically
+            // confirmed: a 1/16 mesh translation moved the visual 1/32 of a block, while the
+            // cuboid translation moved the hitbox the full 1/16. Doubling the mesh translation
+            // (divide by 8 instead of 16) puts visual and hitbox at the same world position.
             var translated = baseline.Clone();
-            translated.Translate(off.X / 16f, off.Y / 16f, off.Z / 16f);
+            translated.Translate(off.X / 8f, off.Y / 8f, off.Z / 8f);
             meshField.SetValue(__instance, translated);
         }
     }
