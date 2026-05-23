@@ -124,9 +124,10 @@ namespace MoveDoors
             {
                 var face = BlockFacing.ALLFACES[pkt.FaceIndex & 0x07];
                 int step = ClampStep(pkt.StepVoxels);
-                int dx = face.Normali.X * step;
-                int dy = face.Normali.Y * step;
-                int dz = face.Normali.Z * step;
+                // Block moves AWAY from the clicked face (opposite to the face's outward normal).
+                int dx = -face.Normali.X * step;
+                int dy = -face.Normali.Y * step;
+                int dz = -face.Normali.Z * step;
 
                 foreach (var p in positions) AddDelta(p, dx, dy, dz);
             }

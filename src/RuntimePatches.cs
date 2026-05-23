@@ -98,6 +98,15 @@ namespace MoveDoors
 
                     // One-time field dump so we can see the actual shape of the BE behavior.
                     DumpFields(type, logger);
+
+                    // Also dump BlockEntityAnimationUtil — animations may render via that path,
+                    // bypassing the BE's mesh field.
+                    var animUtilType = ResolveType("Vintagestory.API.Common.BlockEntityAnimationUtil");
+                    if (animUtilType != null)
+                    {
+                        logger.Notification("[movedoors] --- BlockEntityAnimationUtil structure ---");
+                        DumpFields(animUtilType, logger);
+                    }
                     return;
                 }
                 catch (Exception ex)
