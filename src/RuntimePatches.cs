@@ -111,11 +111,30 @@ namespace MoveDoors
                 }
             }
 
-            // BE.mesh translation: DISABLED in v0.5.12 as a diagnostic experiment.
-            // If door interactions now work visually, the mesh mutation was the source of the
-            // "interaction returns True but no visible change" problem. The trade-off: shifted
-            // closed-state doors will visually render at their original (non-shifted) chunk
-            // position — only open-state and animation use the renderer.pos shift above.
+            // ----- BE.mesh translation (closed-state chunk batch path) -----
+            var meshField = AccessTools.Field(type, "mesh");
+            if (meshField?.GetValue(behavior) is MeshData currentMesh && currentMesh.VerticesCount > 0)
+            {
+                string stateKey = pos.X + ":" + pos.Y + ":" + pos.Z + ":" + (opened ? "open" : "closed");
+
+                if (!baselineMeshes.TryGetValue(stateKey, out var baseline) || baseline == null || baseline.VerticesCount == 0)
+                {
+                    baseline = currentMesh.Clone();
+                    baselineMeshes[stateKey] = baseline;
+                }
+
+                if (!opened && hasOffset)
+                {
+                    var translated = baseline.Clone();
+                    translated.Translate(off.X / 8f, off.Y / 8f, off.Z / 8f);
+                    if (translated.VerticesCount > 0) meshField.SetValue(behavior, translated);
+                }
+                else
+                {
+                    var fresh = baseline.Clone();
+                    if (fresh.VerticesCount > 0) meshField.SetValue(behavior, fresh);
+                }
+            }
         }
 
         // ----- ColSelBoxes (hitbox) postfix -----

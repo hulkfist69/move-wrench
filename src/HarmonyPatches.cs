@@ -75,19 +75,39 @@ namespace MoveDoors
     {
         private static int interactLogCount = 0;
         private static int postfixLogCount = 0;
+        // Dedup: when a click triggers Block.OnBlockInteractStart multiple times in rapid
+        // succession for the same pos (we see 4-8 fires per click in logs), the door toggles
+        // open/close repeatedly and nets to no change. Skip the duplicates.
+        private static long lastInteractTickMs = 0;
+        private static long lastInteractPosHash = 0;
+        private const long DedupWindowMs = 100;
 
-        public static bool Prefix(Block __instance, IWorldAccessor world, IPlayer byPlayer, ref bool __result)
+        public static bool Prefix(Block __instance, IWorldAccessor world, IPlayer byPlayer, BlockSelection blockSel, ref bool __result)
         {
             bool movable = BlockOffsetManager.IsMovable(__instance);
+
+            if (movable && blockSel?.Position != null)
+            {
+                long now = System.Environment.TickCount64;
+                long posHash = ((long)blockSel.Position.X << 40) ^ ((long)blockSel.Position.Y << 20) ^ blockSel.Position.Z;
+                if (posHash == lastInteractPosHash && now - lastInteractTickMs < DedupWindowMs)
+                {
+                    // Treat as already-handled and skip the real call entirely.
+                    __result = true;
+                    return false;
+                }
+                lastInteractTickMs = now;
+                lastInteractPosHash = posHash;
+            }
+
             if (movable && interactLogCount < 8)
             {
                 interactLogCount++;
-                var sel = byPlayer?.CurrentBlockSelection;
                 MoveDoorsModSystem.Logger?.Notification("[movedoors] Block.OnBlockInteractStart fired: "
                     + __instance.Code + " side=" + world.Side
                     + " wrenchHeld=" + WrenchHeld.IsHolding(byPlayer)
-                    + " sel.Pos=" + sel?.Position?.ToString()
-                    + " sel.HitPos=" + sel?.HitPosition?.ToString());
+                    + " sel.Pos=" + blockSel?.Position?.ToString()
+                    + " sel.HitPos=" + blockSel?.HitPosition?.ToString());
             }
 
             bool held = WrenchHeld.IsHolding(byPlayer);
