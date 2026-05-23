@@ -34,7 +34,7 @@ Launch the game, enable in the mod manager. The wrench appears in the creative i
 
 ## Build from source
 
-You need the [.NET 7 SDK](https://dotnet.microsoft.com/download/dotnet/7.0) and a local Vintage Story install.
+You need the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) and a local Vintage Story install.
 
 ```bash
 # Point at your VS install (one-time)
