@@ -21,6 +21,7 @@ namespace MoveDoors
             TryPatchDoorTess(harmony, logger);
             TryPatchColSelBoxes(harmony, logger);
             TryPatchWrenchInteract(harmony, logger);
+            TryPatchRayTrace(harmony, logger);
         }
 
         public static void ClearAll()
@@ -239,6 +240,179 @@ namespace MoveDoors
 
             handling = EnumHandHandling.PreventDefault;
             return false;
+        }
+
+        // ----- Ray-trace selection postfix (interact with shifted door from its new position) -----
+        // VS walks grid cells along the player's gaze ray and asks each cell's block whether the
+        // ray hits its selection boxes. A door shifted out of its grid cell can't be interacted
+        // with by looking at the new hitbox location, because that cell's block is air. We
+        // postfix the ray-trace to also test each shifted door's bounding box against the ray,
+        // and replace the result if a door is hit closer than whatever VS found.
+
+        private static void TryPatchRayTrace(Harmony harmony, ILogger logger)
+        {
+            try
+            {
+                var iface = ResolveType("Vintagestory.API.Common.IBlockAccessor");
+                if (iface == null) return;
+
+                int count = 0;
+                foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+                {
+                    Type[] types;
+                    try { types = asm.GetTypes(); }
+                    catch (ReflectionTypeLoadException ex) { types = ex.Types.Where(t => t != null).ToArray(); }
+
+                    foreach (var t in types)
+                    {
+                        if (t == null || t.IsInterface || t.IsAbstract) continue;
+                        if (!iface.IsAssignableFrom(t)) continue;
+
+                        var method = t.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly)
+                            .FirstOrDefault(m => m.Name == "RayTraceForSelection");
+                        if (method == null) continue;
+
+                        try
+                        {
+                            var postfix = new HarmonyMethod(typeof(RuntimePatches).GetMethod(nameof(RayTracePostfix),
+                                BindingFlags.Static | BindingFlags.NonPublic));
+                            harmony.Patch(method, postfix: postfix);
+                            count++;
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.Warning("[movedoors] couldn't patch " + t.FullName + ".RayTraceForSelection: " + ex.Message);
+                        }
+                    }
+                }
+                logger.Notification("[movedoors] patched " + count + " RayTraceForSelection overloads");
+            }
+            catch (Exception ex)
+            {
+                logger.Warning("[movedoors] TryPatchRayTrace failed: " + ex.Message);
+            }
+        }
+
+        private static void RayTracePostfix(Vec3d fromPos, Vec3d toPos, ref BlockSelection blockSel, IBlockAccessor __instance)
+        {
+            try
+            {
+                var mgr = MoveDoorsModSystem.Offsets;
+                if (mgr == null || mgr.Offsets.Count == 0) return;
+                if (fromPos == null || toPos == null || __instance == null) return;
+
+                double rayLen = toPos.SubCopy(fromPos).Length();
+                double bestT = double.MaxValue;
+                if (blockSel?.HitPosition != null)
+                {
+                    bestT = new Vec3d(
+                        blockSel.Position.X + blockSel.HitPosition.X,
+                        blockSel.Position.Y + blockSel.HitPosition.Y,
+                        blockSel.Position.Z + blockSel.HitPosition.Z
+                    ).SubCopy(fromPos).Length();
+                }
+
+                foreach (var kv in mgr.Offsets)
+                {
+                    var doorPos = kv.Key;
+                    var off = kv.Value;
+                    if (off.X == 0 && off.Y == 0 && off.Z == 0) continue;
+
+                    // Skip if door is far from the ray's general area (cheap pre-filter).
+                    double cdx = doorPos.X + 0.5 - (fromPos.X + toPos.X) / 2;
+                    double cdy = doorPos.Y + 0.5 - (fromPos.Y + toPos.Y) / 2;
+                    double cdz = doorPos.Z + 0.5 - (fromPos.Z + toPos.Z) / 2;
+                    if (cdx * cdx + cdy * cdy + cdz * cdz > (rayLen + 2) * (rayLen + 2)) continue;
+
+                    var block = __instance.GetBlock(doorPos);
+                    if (!BlockOffsetManager.IsMovable(block)) continue;
+
+                    var boxes = block.GetSelectionBoxes(__instance, doorPos);
+                    if (boxes == null || boxes.Length == 0) continue;
+
+                    foreach (var box in boxes)
+                    {
+                        Vec3d boxMin = new Vec3d(box.X1 + doorPos.X, box.Y1 + doorPos.Y, box.Z1 + doorPos.Z);
+                        Vec3d boxMax = new Vec3d(box.X2 + doorPos.X, box.Y2 + doorPos.Y, box.Z2 + doorPos.Z);
+
+                        if (!TryRayAabbHit(fromPos, toPos, boxMin, boxMax, out double t, out BlockFacing face)) continue;
+                        if (t >= bestT) continue;
+
+                        Vec3d hitWorld = new Vec3d(
+                            fromPos.X + (toPos.X - fromPos.X) * (t / rayLen),
+                            fromPos.Y + (toPos.Y - fromPos.Y) * (t / rayLen),
+                            fromPos.Z + (toPos.Z - fromPos.Z) * (t / rayLen)
+                        );
+
+                        bestT = t;
+                        blockSel = new BlockSelection
+                        {
+                            Position = doorPos.Copy(),
+                            Face = face,
+                            HitPosition = new Vec3d(hitWorld.X - doorPos.X, hitWorld.Y - doorPos.Y, hitWorld.Z - doorPos.Z),
+                            DidOffset = 0,
+                            Block = block
+                        };
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MoveDoorsModSystem.Logger?.Warning("[movedoors] RayTracePostfix threw: " + ex.Message);
+            }
+        }
+
+        // Ray-AABB intersection. fromPos / toPos define the ray's bounded segment in world space.
+        // boxMin/boxMax are the world-space AABB. Returns nearest hit distance (t, in world units
+        // measured from fromPos along the ray segment) and which face was entered.
+        private static bool TryRayAabbHit(Vec3d fromPos, Vec3d toPos, Vec3d boxMin, Vec3d boxMax,
+            out double tHit, out BlockFacing face)
+        {
+            tHit = 0;
+            face = BlockFacing.UP;
+
+            Vec3d dir = toPos.SubCopy(fromPos);
+            double rayLen = dir.Length();
+            if (rayLen < 1e-6) return false;
+
+            double tNear = 0;
+            double tFar = rayLen;
+            int hitAxis = -1;
+            int hitSign = 0;
+
+            for (int axis = 0; axis < 3; axis++)
+            {
+                double o = axis == 0 ? fromPos.X : axis == 1 ? fromPos.Y : fromPos.Z;
+                double d = axis == 0 ? dir.X : axis == 1 ? dir.Y : dir.Z;
+                double bMin = axis == 0 ? boxMin.X : axis == 1 ? boxMin.Y : boxMin.Z;
+                double bMax = axis == 0 ? boxMax.X : axis == 1 ? boxMax.Y : boxMax.Z;
+
+                if (Math.Abs(d) < 1e-9)
+                {
+                    if (o < bMin || o > bMax) return false;
+                    continue;
+                }
+
+                double t1 = (bMin - o) / d;
+                double t2 = (bMax - o) / d;
+                int signEntering = -1;
+                if (t1 > t2) { (t1, t2) = (t2, t1); signEntering = 1; }
+
+                if (t1 > tNear) { tNear = t1; hitAxis = axis; hitSign = signEntering; }
+                if (t2 < tFar) tFar = t2;
+                if (tNear > tFar) return false;
+            }
+
+            if (tNear < 0 || tNear > rayLen) return false;
+
+            tHit = tNear;
+            switch (hitAxis)
+            {
+                case 0: face = hitSign > 0 ? BlockFacing.EAST : BlockFacing.WEST; break;
+                case 1: face = hitSign > 0 ? BlockFacing.UP : BlockFacing.DOWN; break;
+                case 2: face = hitSign > 0 ? BlockFacing.SOUTH : BlockFacing.NORTH; break;
+            }
+            return true;
         }
 
         // ----- Helper to apply offset directly to a BE (used after world-load sync) -----

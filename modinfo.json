@@ -2,7 +2,7 @@
   "type": "code",
   "name": "Move Wrench",
   "modid": "movedoors",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Adds sub-voxel block movement modes to the base game wrench. Press F (with the wrench in hand) to pick a mode: Rotate (vanilla wrench rotation), or Move 1/2/4 voxels. In a Move mode, right-clicking a door, trapdoor, or fence gate pushes it away from the clicked face; sneak + right-click resets it. Paired (double) doors and two-tall doors move together. In Rotate mode the wrench behaves exactly as vanilla, rotating any block including doors.",
   "authors": ["Cody"],
   "side": "Universal",
