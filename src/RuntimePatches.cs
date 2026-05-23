@@ -447,23 +447,24 @@ namespace MoveDoors
                     if (!selectionFieldResolved)
                     {
                         selectionFieldResolved = true;
-                        var pType = player.GetType();
-                        selectionProp = pType.GetProperty("CurrentBlockSelection",
-                            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                        if (selectionProp?.GetSetMethod(true) == null) selectionProp = null;
-                        if (selectionProp == null)
+                        // VS 1.22 stores the player's selected block on the EntityPlayer as a
+                        // public field named "BlockSelection".
+                        var eType = entity.GetType();
+                        Type cur = eType;
+                        while (cur != null && cur != typeof(object) && selectionBackingField == null)
                         {
-                            selectionBackingField = pType.GetField("CurrentBlockSelection",
-                                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-                                ?? pType.GetField("<CurrentBlockSelection>k__BackingField",
-                                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                            selectionBackingField = cur.GetField("BlockSelection",
+                                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
+                            cur = cur.BaseType;
                         }
                         MoveDoorsModSystem.Logger?.Notification("[movedoors] selection writer: "
-                            + (selectionProp != null ? "property setter" : selectionBackingField != null ? "backing field " + selectionBackingField.Name : "NONE FOUND"));
+                            + (selectionBackingField != null ? "entity field " + selectionBackingField.Name : "NONE FOUND"));
                     }
 
-                    if (selectionProp != null) selectionProp.SetValue(player, bestNew);
-                    else if (selectionBackingField != null) selectionBackingField.SetValue(player, bestNew);
+                    if (selectionBackingField != null)
+                    {
+                        selectionBackingField.SetValue(entity, bestNew);
+                    }
 
                     if (retargetLogCount < 3)
                     {
