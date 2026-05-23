@@ -1,3 +1,4 @@
+using System.Text;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
@@ -7,6 +8,14 @@ namespace MoveDoors
 {
     public class ItemDoorWrench : Item
     {
+        public override void GetHeldItemInfo(ItemSlot inSlot, StringBuilder dsc, IWorldAccessor world, bool withDebugInfo)
+        {
+            base.GetHeldItemInfo(inSlot, dsc, world, withDebugInfo);
+            dsc.AppendLine();
+            dsc.AppendLine("Build " + BuildInfo.Version + " " + BuildInfo.Sha);
+            dsc.AppendLine(BuildInfo.Stamp);
+        }
+
         public override void OnHeldInteractStart(
             ItemSlot slot,
             EntityAgent byEntity,

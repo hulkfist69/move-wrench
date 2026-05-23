@@ -17,6 +17,45 @@ namespace MoveDoors
             TryPatchBoxes(harmony, logger, "Vintagestory.GameContent.BlockTrapDoor");
             TryPatchBoxes(harmony, logger, "Vintagestory.GameContent.BlockTrapdoor");
             TryPatchDoorMesh(harmony, logger);
+
+            // Doors may open via a BlockBehavior (different namespace/name across versions).
+            // Try each candidate; silently no-op if not present.
+            string[] behaviorCandidates = {
+                "Vintagestory.GameContent.BlockBehaviorDoor",
+                "Vintagestory.GameContent.BehaviorDoor",
+                "Vintagestory.GameContent.BlockBehaviorOpenableContainer",
+                "Vintagestory.GameContent.BlockBehaviorDoorFence",
+            };
+            foreach (var t in behaviorCandidates) TryPatchBehaviorInteract(harmony, logger, t);
+        }
+
+        private static void TryPatchBehaviorInteract(Harmony harmony, ILogger logger, string typeName)
+        {
+            try
+            {
+                var type = ResolveType(typeName);
+                if (type == null) return;
+
+                // Behavior signature is OnBlockInteractStart(IWorldAccessor, IPlayer, BlockSelection, ref EnumHandling).
+                var method = type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                    .FirstOrDefault(m => m.Name == "OnBlockInteractStart");
+                if (method == null) return;
+
+                var prefix = new HarmonyMethod(typeof(RuntimePatches).GetMethod(nameof(BehaviorInteractPrefix),
+                    BindingFlags.Static | BindingFlags.NonPublic));
+                harmony.Patch(method, prefix: prefix);
+                logger.Notification("[movedoors] patched " + typeName + ".OnBlockInteractStart");
+            }
+            catch (Exception ex)
+            {
+                logger.Warning("[movedoors] TryPatchBehaviorInteract(" + typeName + ") failed: " + ex.Message);
+            }
+        }
+
+        // Generic prefix: drops out early if wrench is held.
+        private static bool BehaviorInteractPrefix(IPlayer byPlayer)
+        {
+            return !WrenchHeld.IsHolding(byPlayer);
         }
 
         private static void TryPatchBoxes(Harmony harmony, ILogger logger, string typeName)
