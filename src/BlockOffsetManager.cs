@@ -144,18 +144,46 @@ namespace MoveDoors
         private List<BlockPos> CollectGroup(BlockPos pos, Block block)
         {
             var list = new List<BlockPos> { pos };
+            var ba = sapi.World.BlockAccessor;
 
-            // Double doors: include the paired half if present.
-            if (block is BlockDoor)
+            // VS 1.22+: the BEBehaviorDoor exposes LeftDoor / RightDoor properties pointing at
+            // its paired half (when part of a double door). Use those — much more reliable than
+            // guessing neighbors.
+            var be = ba.GetBlockEntity(pos);
+            if (be?.Behaviors != null)
             {
-                var paired = DoorGroup.FindPaired(sapi.World.BlockAccessor, pos);
-                if (paired != null && !list.Contains(paired)) list.Add(paired);
+                foreach (var beh in be.Behaviors)
+                {
+                    if (beh?.GetType().Name != "BEBehaviorDoor") continue;
+                    var bType = beh.GetType();
+                    foreach (var propName in new[] { "LeftDoor", "RightDoor" })
+                    {
+                        var paired = bType.GetProperty(propName)?.GetValue(beh);
+                        if (paired == null) continue;
+                        var pairedPos = paired.GetType().GetProperty("Pos")?.GetValue(paired) as BlockPos;
+                        if (pairedPos == null) continue;
+                        bool already = false;
+                        foreach (var p in list) if (p.X == pairedPos.X && p.Y == pairedPos.Y && p.Z == pairedPos.Z) { already = true; break; }
+                        if (!already) list.Add(pairedPos.Copy());
+                    }
+                    break;
+                }
+            }
 
-                // Two-block-tall door: include neighboring vertical BlockDoor blocks.
-                var up = pos.UpCopy();
-                if (sapi.World.BlockAccessor.GetBlock(up) is BlockDoor && !list.Contains(up)) list.Add(up);
-                var down = pos.DownCopy();
-                if (sapi.World.BlockAccessor.GetBlock(down) is BlockDoor && !list.Contains(down)) list.Add(down);
+            // Two-block-tall doors: include vertical neighbors if they're also movable.
+            var up = pos.UpCopy();
+            if (IsMovable(ba.GetBlock(up)))
+            {
+                bool already = false;
+                foreach (var p in list) if (p.X == up.X && p.Y == up.Y && p.Z == up.Z) { already = true; break; }
+                if (!already) list.Add(up);
+            }
+            var down = pos.DownCopy();
+            if (IsMovable(ba.GetBlock(down)))
+            {
+                bool already = false;
+                foreach (var p in list) if (p.X == down.X && p.Y == down.Y && p.Z == down.Z) { already = true; break; }
+                if (!already) list.Add(down);
             }
             return list;
         }

@@ -41,13 +41,6 @@ namespace MoveDoors
         public static void Postfix(Block __instance, BlockPos pos, ref Cuboidf[] __result)
         {
             if (!BlockOffsetManager.IsMovable(__instance)) return;
-            var off = MoveDoorsModSystem.Offsets?.Get(pos);
-            if (off != null && (off.X != 0 || off.Y != 0 || off.Z != 0))
-            {
-                MoveDoorsModSystem.Logger?.Notification("[movedoors] GetCollisionBoxes call for "
-                    + __instance.GetType().Name + " at " + pos + " off=" + off
-                    + " resultBoxes=" + (__result?.Length ?? 0));
-            }
             OffsetHelper.Apply(pos, ref __result);
         }
     }
@@ -69,25 +62,10 @@ namespace MoveDoors
         {
             bool held = WrenchHeld.IsHolding(byPlayer);
 
-            if (held)
+            if (held && BlockOffsetManager.IsMovable(__instance))
             {
-                // Log EVERY interact when the wrench is in hand, regardless of movable status,
-                // so we can see exactly what class the target block is.
-                bool movable = BlockOffsetManager.IsMovable(__instance);
-                var behaviorNames = __instance.BlockEntityBehaviors == null
-                    ? ""
-                    : string.Join(",", __instance.BlockEntityBehaviors.Select(b => b?.Name ?? "?"));
-                world.Logger.Notification("[movedoors] interact"
-                    + " class=" + __instance.GetType().Name
-                    + " code=" + __instance.Code
-                    + " movable=" + movable
-                    + " beBehaviors=[" + behaviorNames + "]");
-
-                if (movable)
-                {
-                    __result = false;
-                    return false;
-                }
+                __result = false;
+                return false;
             }
 
             return true;

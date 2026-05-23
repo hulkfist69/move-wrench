@@ -15,6 +15,47 @@ namespace MoveDoors
         public static void Apply(Harmony harmony, ILogger logger)
         {
             TryPatchDoorMesh(harmony, logger);
+            TryPatchColSelBoxes(harmony, logger);
+        }
+
+        private static void TryPatchColSelBoxes(Harmony harmony, ILogger logger)
+        {
+            try
+            {
+                var type = ResolveType("Vintagestory.GameContent.BEBehaviorDoor");
+                if (type == null) return;
+                var prop = type.GetProperty("ColSelBoxes", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                var getter = prop?.GetGetMethod(true);
+                if (getter == null) return;
+
+                var postfix = new HarmonyMethod(typeof(RuntimePatches).GetMethod(nameof(ColSelBoxesPostfix),
+                    BindingFlags.Static | BindingFlags.NonPublic));
+                harmony.Patch(getter, postfix: postfix);
+                logger.Notification("[movedoors] patched BEBehaviorDoor.ColSelBoxes getter");
+            }
+            catch (Exception ex)
+            {
+                logger.Warning("[movedoors] TryPatchColSelBoxes failed: " + ex.Message);
+            }
+        }
+
+        private static void ColSelBoxesPostfix(object __instance, ref Cuboidf[] __result)
+        {
+            var posProp = AccessTools.Property(__instance.GetType(), "Pos");
+            BlockPos pos = posProp?.GetValue(__instance) as BlockPos;
+            if (pos == null) return;
+            var off = MoveDoorsModSystem.Offsets?.Get(pos);
+            if (off == null || (off.X == 0 && off.Y == 0 && off.Z == 0)) return;
+            if (__result == null) return;
+
+            float dx = off.X / 16f, dy = off.Y / 16f, dz = off.Z / 16f;
+            var shifted = new Cuboidf[__result.Length];
+            for (int i = 0; i < __result.Length; i++)
+            {
+                var c = __result[i];
+                shifted[i] = new Cuboidf(c.X1 + dx, c.Y1 + dy, c.Z1 + dz, c.X2 + dx, c.Y2 + dy, c.Z2 + dz);
+            }
+            __result = shifted;
         }
 
         private static void TryPatchDoorMesh(Harmony harmony, ILogger logger)
@@ -80,36 +121,18 @@ namespace MoveDoors
         {
             var posProp = AccessTools.Property(__instance.GetType(), "Pos");
             BlockPos pos = posProp?.GetValue(__instance) as BlockPos;
+            if (pos == null) return;
 
-            var off = pos == null ? null : MoveDoorsModSystem.Offsets?.Get(pos);
-            bool hasOffset = off != null && (off.X != 0 || off.Y != 0 || off.Z != 0);
+            var off = MoveDoorsModSystem.Offsets?.Get(pos);
+            if (off == null || (off.X == 0 && off.Y == 0 && off.Z == 0)) return;
 
-            // Find every MeshData-typed field on the BE.
-            var meshFields = __instance.GetType()
-                .GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-                .Where(f => f.FieldType == typeof(MeshData))
-                .ToList();
-
-            var fieldNames = string.Join(",", meshFields.Select(f => f.Name + "=" + (f.GetValue(__instance) == null ? "null" : "MeshData")));
-
-            MoveDoorsModSystem.Logger?.Notification("[movedoors] DoorMeshPostfix pos=" + pos
-                + " offset=" + (hasOffset ? off.ToString() : "none")
-                + " meshFields=[" + fieldNames + "]");
-
-            if (!hasOffset) return;
+            var f = AccessTools.Field(__instance.GetType(), "mesh");
+            if (f?.GetValue(__instance) is not MeshData md) return;
 
             float dx = off.X / 16f, dy = off.Y / 16f, dz = off.Z / 16f;
-            foreach (var f in meshFields)
-            {
-                if (f.GetValue(__instance) is MeshData md)
-                {
-                    var clone = md.Clone();
-                    clone.Translate(dx, dy, dz);
-                    f.SetValue(__instance, clone);
-                    MoveDoorsModSystem.Logger?.Notification("[movedoors] translated field '" + f.Name + "' by (" + dx + "," + dy + "," + dz + ")");
-                    return;
-                }
-            }
+            var clone = md.Clone();
+            clone.Translate(dx, dy, dz);
+            f.SetValue(__instance, clone);
         }
     }
 }
