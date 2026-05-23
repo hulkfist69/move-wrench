@@ -350,7 +350,7 @@ namespace MoveDoors
                             Position = doorPos.Copy(),
                             Face = face,
                             HitPosition = new Vec3d(hitWorld.X - doorPos.X, hitWorld.Y - doorPos.Y, hitWorld.Z - doorPos.Z),
-                            DidOffset = 0,
+                            DidOffset = false,
                             Block = block
                         };
                     }
