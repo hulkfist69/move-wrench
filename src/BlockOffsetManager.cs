@@ -58,9 +58,11 @@ namespace MoveDoors
         public static bool IsMovable(Block block)
         {
             if (block == null) return false;
-            return block is BlockDoor
-                || block is BlockTrapDoor
-                || block is BlockFenceGate;
+            if (block is BlockDoor || block is BlockFenceGate) return true;
+            // Trapdoor class name varies between VS versions — match by typename.
+            var tn = block.GetType().Name;
+            return tn.IndexOf("Trapdoor", StringComparison.OrdinalIgnoreCase) >= 0
+                || tn.IndexOf("TrapDoor", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         // ----- Client → Server -----
@@ -83,7 +85,7 @@ namespace MoveDoors
             if (!IsMovable(block)) return;
 
             // Basic reach sanity check.
-            var eyePos = player.Entity.SidedPos.XYZ.Add(0, player.Entity.LocalEyePos.Y, 0);
+            var eyePos = player.Entity.Pos.XYZ.Add(0, player.Entity.LocalEyePos.Y, 0);
             if (eyePos.DistanceTo(pos.X + 0.5, pos.Y + 0.5, pos.Z + 0.5) > 8) return;
 
             var positions = CollectGroup(pos, block);
@@ -122,15 +124,11 @@ namespace MoveDoors
                 var paired = DoorGroup.FindPaired(sapi.World.BlockAccessor, pos);
                 if (paired != null && !list.Contains(paired)) list.Add(paired);
 
-                // Two-block-tall door: include the second block.
-                var be = sapi.World.BlockAccessor.GetBlockEntity(pos) as BlockEntityDoor;
-                if (be != null)
-                {
-                    var up = pos.UpCopy();
-                    if (sapi.World.BlockAccessor.GetBlock(up) is BlockDoor) list.Add(up);
-                    var down = pos.DownCopy();
-                    if (sapi.World.BlockAccessor.GetBlock(down) is BlockDoor && !list.Contains(down)) list.Add(down);
-                }
+                // Two-block-tall door: include neighboring vertical BlockDoor blocks.
+                var up = pos.UpCopy();
+                if (sapi.World.BlockAccessor.GetBlock(up) is BlockDoor && !list.Contains(up)) list.Add(up);
+                var down = pos.DownCopy();
+                if (sapi.World.BlockAccessor.GetBlock(down) is BlockDoor && !list.Contains(down)) list.Add(down);
             }
             return list;
         }
