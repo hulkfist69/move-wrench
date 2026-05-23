@@ -166,33 +166,63 @@ namespace MoveDoors
             BlockPos pos = AccessTools.Property(type, "Pos")?.GetValue(__instance) as BlockPos;
             if (pos == null) return;
 
-            var animUtilField = AccessTools.Field(type, "animUtil");
-            var animUtil = animUtilField?.GetValue(__instance);
-            if (animUtil == null) return;
-
-            var rendererField = AccessTools.Field(animUtil.GetType(), "renderer");
-            var renderer = rendererField?.GetValue(animUtil);
-            if (renderer == null) return;
-
-            // Shift the renderer's world-space position by our offset. The renderer draws the
-            // door at this position, and all of VS's rotation / animation / scale transforms
-            // happen relative to it — so the entire visible door rides along, naturally matching
-            // the hitbox for closed AND open states.
-            var posField = AccessTools.Field(renderer.GetType(), "pos");
-            if (posField == null) return;
-
             var off = MoveDoorsModSystem.Offsets?.Get(pos);
             bool hasOffset = off != null && (off.X != 0 || off.Y != 0 || off.Z != 0);
 
-            // Doubled magnitude: /8 instead of /16. Empirically the renderer's pos shift lands
-            // the visual at half the requested world distance — same scale factor pattern we hit
-            // with mesh translation earlier. Doubling the input compensates so the visual lands
-            // exactly at the hitbox position for both closed and open states.
-            Vec3d target = hasOffset
-                ? new Vec3d(pos.X + off.X / 8.0, pos.Y + off.Y / 8.0, pos.Z + off.Z / 8.0)
-                : new Vec3d(pos.X, pos.Y, pos.Z);
+            var openedField = AccessTools.Field(type, "opened");
+            bool opened = openedField?.GetValue(__instance) is bool ob && ob;
 
-            posField.SetValue(renderer, target);
+            // === Open/animation path: shift the renderer's world-space pos. ===
+            // This was confirmed working in v0.3.22 for open + animation states. Don't touch
+            // the logic.
+            var animUtilField = AccessTools.Field(type, "animUtil");
+            var animUtil = animUtilField?.GetValue(__instance);
+            if (animUtil != null)
+            {
+                var rendererField = AccessTools.Field(animUtil.GetType(), "renderer");
+                var renderer = rendererField?.GetValue(animUtil);
+                if (renderer != null)
+                {
+                    var posField = AccessTools.Field(renderer.GetType(), "pos");
+                    if (posField != null)
+                    {
+                        Vec3d target = hasOffset
+                            ? new Vec3d(pos.X + off.X / 8.0, pos.Y + off.Y / 8.0, pos.Z + off.Z / 8.0)
+                            : new Vec3d(pos.X, pos.Y, pos.Z);
+                        posField.SetValue(renderer, target);
+                    }
+                }
+            }
+
+            // === Closed-state path: translate BE.mesh. ===
+            // Closed doors render via the chunk batch which reads BE.mesh. Translate that mesh
+            // so the chunk-batched contribution matches the hitbox. Only do this when the door
+            // is currently in the closed state — leave the open mesh alone so the open-state
+            // render (which uses renderer.pos) isn't double-shifted.
+            if (!opened)
+            {
+                var meshField = AccessTools.Field(type, "mesh");
+                if (meshField?.GetValue(__instance) is MeshData currentMesh)
+                {
+                    string closedKey = pos.X + ":" + pos.Y + ":" + pos.Z + ":closed";
+                    if (!baselineMeshes.TryGetValue(closedKey, out var baseline))
+                    {
+                        baseline = currentMesh.Clone();
+                        baselineMeshes[closedKey] = baseline;
+                    }
+
+                    if (hasOffset)
+                    {
+                        var translated = baseline.Clone();
+                        translated.Translate(off.X / 8f, off.Y / 8f, off.Z / 8f);
+                        meshField.SetValue(__instance, translated);
+                    }
+                    else
+                    {
+                        meshField.SetValue(__instance, baseline.Clone());
+                    }
+                }
+            }
         }
     }
 }
