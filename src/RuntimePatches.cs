@@ -99,6 +99,26 @@ namespace MoveDoors
                     // One-time field dump so we can see the actual shape of the BE behavior.
                     DumpFields(type, logger);
 
+                    // Dump BlockEntityAnimationUtil — this is the door's render path; we need to
+                    // find a model-matrix or transform hook on it to apply world-space offset
+                    // at render time (the only way to truly align the texture with the hitbox).
+                    var animType = ResolveType("Vintagestory.API.Common.BlockEntityAnimationUtil");
+                    if (animType != null)
+                    {
+                        logger.Notification("[movedoors] --- BlockEntityAnimationUtil structure ---");
+                        DumpFields(animType, logger);
+
+                        // Also dump nested types that might hold the renderer.
+                        foreach (var fi in animType.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
+                        {
+                            if (fi.FieldType.Name.Contains("Renderer") || fi.FieldType.Name.Contains("Animator"))
+                            {
+                                logger.Notification("[movedoors] --- nested " + fi.FieldType.FullName + " ---");
+                                DumpFields(fi.FieldType, logger);
+                            }
+                        }
+                    }
+
                     // Also dump BlockEntityAnimationUtil — animations may render via that path,
                     // bypassing the BE's mesh field.
                     var animUtilType = ResolveType("Vintagestory.API.Common.BlockEntityAnimationUtil");
@@ -170,26 +190,12 @@ namespace MoveDoors
                 baselineMeshes[key] = baseline;
             }
 
-            // New approach: instead of mutating the mesh data ourselves (which forces us to
-            // reason about facing-rotation, animation rotation, and mesh-local-vs-world scale),
-            // write the offset into the BE's own leftDoorOffset / rightDoorOffset Vec3i fields.
-            // These are part of VS's native door render pipeline and applied AFTER the renderer's
-            // rotation transforms — so anything written here gets applied as a world-space shift,
-            // matching what the hitbox does.
-            //
-            // We also restore the cached baseline mesh (in case prior versions of the mod left a
-            // mutated translated mesh in the field).
-            meshField.SetValue(__instance, baseline.Clone());
-
-            var leftField = AccessTools.Field(type, "leftDoorOffset");
-            var rightField = AccessTools.Field(type, "rightDoorOffset");
-
-            var native = new Vec3i(off.X, off.Y, off.Z);
-            leftField?.SetValue(__instance, native);
-            rightField?.SetValue(__instance, native);
-
-            MoveDoorsModSystem.Logger?.Notification("[movedoors] mesh patched via native offset fields"
-                + " pos=" + pos + " off=" + native + " state=" + (opened ? "open" : "closed"));
+            // v0.3.13 simple translation (no rotation correction). Works at least for closed
+            // north-facing. Other facings + open + animation are still off — fix in v0.4 will be
+            // to patch the renderer's model matrix instead of mutating mesh data.
+            var translated = baseline.Clone();
+            translated.Translate(off.X / 8f, off.Y / 8f, off.Z / 8f);
+            meshField.SetValue(__instance, translated);
         }
     }
 }
