@@ -170,53 +170,26 @@ namespace MoveDoors
                 baselineMeshes[key] = baseline;
             }
 
-            float dx = off.X / 8f;
-            float dy = off.Y / 8f;
-            float dz = off.Z / 8f;
+            // New approach: instead of mutating the mesh data ourselves (which forces us to
+            // reason about facing-rotation, animation rotation, and mesh-local-vs-world scale),
+            // write the offset into the BE's own leftDoorOffset / rightDoorOffset Vec3i fields.
+            // These are part of VS's native door render pipeline and applied AFTER the renderer's
+            // rotation transforms — so anything written here gets applied as a world-space shift,
+            // matching what the hitbox does.
+            //
+            // We also restore the cached baseline mesh (in case prior versions of the mod left a
+            // mutated translated mesh in the field).
+            meshField.SetValue(__instance, baseline.Clone());
 
-            var rotateField = AccessTools.Field(type, "RotateYRad");
-            float animAngle = rotateField?.GetValue(__instance) is float r ? r : 0f;
+            var leftField = AccessTools.Field(type, "leftDoorOffset");
+            var rightField = AccessTools.Field(type, "rightDoorOffset");
 
-            // Facing rotation (north=0, east=π/2, south=π, west=3π/2). This is the angle the
-            // renderer rotates the canonical-mesh by to face the door's actual world direction.
-            float facingAngle = 0f;
-            string facingStr = "?";
-            try
-            {
-                var facingProp = AccessTools.Property(type, opened ? "facingWhenOpened" : "facingWhenClosed");
-                var facing = facingProp?.GetValue(__instance);
-                if (facing != null)
-                {
-                    facingStr = facing.ToString() ?? "?";
-                    var idxProp = facing.GetType().GetProperty("HorizontalAngleIndex");
-                    if (idxProp?.GetValue(facing) is int hidx)
-                    {
-                        facingAngle = hidx * (float)(Math.PI / 2);
-                    }
-                }
-            }
-            catch { }
+            var native = new Vec3i(off.X, off.Y, off.Z);
+            leftField?.SetValue(__instance, native);
+            rightField?.SetValue(__instance, native);
 
-            // Total rotation applied to mesh by renderer = facing + animation.
-            float totalAngle = facingAngle + animAngle;
-            float cos = (float)Math.Cos(totalAngle);
-            float sin = (float)Math.Sin(totalAngle);
-            float invDx = dx * cos - dz * sin;
-            float invDz = dx * sin + dz * cos;
-
-            MoveDoorsModSystem.Logger?.Notification("[movedoors] mesh translate pos=" + pos
-                + " off=" + off
-                + " state=" + (opened ? "open" : "closed")
-                + " facing=" + facingStr
-                + " facingAngle=" + facingAngle.ToString("0.###")
-                + " RotateYRad=" + animAngle.ToString("0.###")
-                + " total=" + totalAngle.ToString("0.###")
-                + " input(dx,dy,dz)=(" + dx.ToString("0.###") + "," + dy.ToString("0.###") + "," + dz.ToString("0.###") + ")"
-                + " applied(invDx,dy,invDz)=(" + invDx.ToString("0.###") + "," + dy.ToString("0.###") + "," + invDz.ToString("0.###") + ")");
-
-            var translated = baseline.Clone();
-            translated.Translate(invDx, dy, invDz);
-            meshField.SetValue(__instance, translated);
+            MoveDoorsModSystem.Logger?.Notification("[movedoors] mesh patched via native offset fields"
+                + " pos=" + pos + " off=" + native + " state=" + (opened ? "open" : "closed"));
         }
     }
 }
