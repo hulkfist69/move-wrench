@@ -319,32 +319,36 @@ namespace MoveDoors
                 MoveDoorsModSystem.Logger?.Notification("[movedoors] player class: " + t.FullName);
                 MoveDoorsModSystem.Logger?.Notification("[movedoors] entity class: " + player.Entity?.GetType().FullName);
 
-                // Walk up the class hierarchy and dump all selection / pick related members.
+                // Dump every field on the class hierarchy whose TYPE is BlockSelection — that's
+                // the storage backing the get-only IPlayer.CurrentBlockSelection property.
                 Type cur = t;
                 while (cur != null && cur != typeof(object))
                 {
                     foreach (var f in cur.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
                     {
-                        var n = f.Name;
-                        if (n.IndexOf("Selection", StringComparison.OrdinalIgnoreCase) >= 0
-                            || n.IndexOf("Pick", StringComparison.OrdinalIgnoreCase) >= 0
-                            || n.IndexOf("Target", StringComparison.OrdinalIgnoreCase) >= 0)
+                        if (f.FieldType.Name == "BlockSelection")
                         {
-                            MoveDoorsModSystem.Logger?.Notification("[movedoors] " + cur.Name + ".field " + f.Name + " : " + f.FieldType.Name);
-                        }
-                    }
-                    foreach (var p in cur.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
-                    {
-                        var n = p.Name;
-                        if (n.IndexOf("Selection", StringComparison.OrdinalIgnoreCase) >= 0
-                            || n.IndexOf("Pick", StringComparison.OrdinalIgnoreCase) >= 0
-                            || n.IndexOf("Target", StringComparison.OrdinalIgnoreCase) >= 0)
-                        {
-                            MoveDoorsModSystem.Logger?.Notification("[movedoors] " + cur.Name + ".prop " + p.Name + " : " + p.PropertyType.Name
-                                + " (get=" + (p.GetGetMethod(true) != null) + " set=" + (p.GetSetMethod(true) != null) + ")");
+                            MoveDoorsModSystem.Logger?.Notification("[movedoors] " + cur.Name + ".field<BlockSelection> " + f.Name);
                         }
                     }
                     cur = cur.BaseType;
+                }
+
+                // Same scan on the entity class (selection might be stored on the EntityPlayer instead).
+                if (player.Entity != null)
+                {
+                    cur = player.Entity.GetType();
+                    while (cur != null && cur != typeof(object))
+                    {
+                        foreach (var f in cur.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
+                        {
+                            if (f.FieldType.Name == "BlockSelection")
+                            {
+                                MoveDoorsModSystem.Logger?.Notification("[movedoors] entity " + cur.Name + ".field<BlockSelection> " + f.Name);
+                            }
+                        }
+                        cur = cur.BaseType;
+                    }
                 }
             }
             catch (Exception ex)
