@@ -206,6 +206,18 @@ namespace MoveDoors
             Broadcast(pos, next, remove: false);
         }
 
+        // Called by the OnBlockBroken Harmony postfix to drop the offset (and baseline cache) for a
+        // destroyed door, so its replacement at the same pos starts at zero offset.
+        public void OnBlockRemoved(BlockPos pos)
+        {
+            if (pos == null) return;
+            if (Get(pos) != null)
+            {
+                RemoveOffset(pos);
+            }
+            RuntimePatches.ClearBaseline(pos);
+        }
+
         private void RemoveOffset(BlockPos pos)
         {
             BlockPos key = null;
@@ -214,6 +226,7 @@ namespace MoveDoors
                 if (k.X == pos.X && k.Y == pos.Y && k.Z == pos.Z) { key = k; break; }
             }
             if (key != null) Offsets.Remove(key);
+            RuntimePatches.ClearBaseline(pos);
             Broadcast(pos, new Vec3i(0, 0, 0), remove: true);
         }
 
@@ -256,6 +269,7 @@ namespace MoveDoors
             if (pkt.Remove)
             {
                 if (key != null) Offsets.Remove(key);
+                RuntimePatches.ClearBaseline(pos);
             }
             else
             {

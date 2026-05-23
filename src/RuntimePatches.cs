@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using HarmonyLib;
@@ -12,6 +13,19 @@ namespace MoveDoors
     // Each Try* logs and continues on failure, so a missing class never blocks the mod.
     public static class RuntimePatches
     {
+        // Caches the un-translated baseline mesh per (pos, opened-state). Re-tesselation triggered
+        // by neighbor doors would otherwise read OUR already-translated clone and translate again,
+        // compounding the offset. By always translating from a stored baseline, the result is stable.
+        private static readonly Dictionary<string, MeshData> baselineMeshes = new Dictionary<string, MeshData>();
+
+        public static void ClearBaseline(BlockPos pos)
+        {
+            if (pos == null) return;
+            var prefix = pos.X + ":" + pos.Y + ":" + pos.Z + ":";
+            var keys = baselineMeshes.Keys.Where(k => k.StartsWith(prefix)).ToList();
+            foreach (var k in keys) baselineMeshes.Remove(k);
+        }
+
         public static void Apply(Harmony harmony, ILogger logger)
         {
             TryPatchDoorMesh(harmony, logger);
@@ -119,20 +133,43 @@ namespace MoveDoors
 
         private static void DoorMeshPostfix(object __instance)
         {
-            var posProp = AccessTools.Property(__instance.GetType(), "Pos");
-            BlockPos pos = posProp?.GetValue(__instance) as BlockPos;
+            var type = __instance.GetType();
+            BlockPos pos = AccessTools.Property(type, "Pos")?.GetValue(__instance) as BlockPos;
             if (pos == null) return;
 
+            var meshField = AccessTools.Field(type, "mesh");
+            if (meshField == null) return;
+            if (meshField.GetValue(__instance) is not MeshData currentMesh) return;
+
+            // Read the BE's opened state — the baseline mesh differs between closed/open.
+            var openedField = AccessTools.Field(type, "opened");
+            bool opened = openedField?.GetValue(__instance) is bool ob && ob;
+
+            string key = pos.X + ":" + pos.Y + ":" + pos.Z + ":" + (opened ? "1" : "0");
+
             var off = MoveDoorsModSystem.Offsets?.Get(pos);
-            if (off == null || (off.X == 0 && off.Y == 0 && off.Z == 0)) return;
+            bool hasOffset = off != null && (off.X != 0 || off.Y != 0 || off.Z != 0);
 
-            var f = AccessTools.Field(__instance.GetType(), "mesh");
-            if (f?.GetValue(__instance) is not MeshData md) return;
+            if (!hasOffset)
+            {
+                // No offset for this pos — drop any stored baseline (door isn't being moved any more).
+                baselineMeshes.Remove(key);
+                return;
+            }
 
-            float dx = off.X / 16f, dy = off.Y / 16f, dz = off.Z / 16f;
-            var clone = md.Clone();
-            clone.Translate(dx, dy, dz);
-            f.SetValue(__instance, clone);
+            // Establish baseline. If we don't have one for this (pos, opened) yet, the current mesh
+            // is presumed fresh — store a clone of it.
+            if (!baselineMeshes.TryGetValue(key, out var baseline))
+            {
+                baseline = currentMesh.Clone();
+                baselineMeshes[key] = baseline;
+            }
+
+            // Always translate FROM the stored baseline, never from the current field value (which
+            // may already be our translated clone).
+            var translated = baseline.Clone();
+            translated.Translate(off.X / 16f, off.Y / 16f, off.Z / 16f);
+            meshField.SetValue(__instance, translated);
         }
     }
 }

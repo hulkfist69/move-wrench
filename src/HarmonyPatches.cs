@@ -71,4 +71,17 @@ namespace MoveDoors
             return true;
         }
     }
+
+    // When a door is broken, clear any stored offset for that position so a freshly placed
+    // door doesn't inherit the previous owner's offset.
+    [HarmonyPatch(typeof(Block), nameof(Block.OnBlockBroken))]
+    public static class Patch_Block_OnBlockBroken
+    {
+        public static void Postfix(Block __instance, IWorldAccessor world, BlockPos pos)
+        {
+            if (world?.Side != EnumAppSide.Server) return;
+            if (!BlockOffsetManager.IsMovable(__instance)) return;
+            MoveDoorsModSystem.Offsets?.OnBlockRemoved(pos);
+        }
+    }
 }
