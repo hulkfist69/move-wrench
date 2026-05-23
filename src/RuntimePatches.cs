@@ -184,14 +184,15 @@ namespace MoveDoors
             var off = MoveDoorsModSystem.Offsets?.Get(pos);
             bool hasOffset = off != null && (off.X != 0 || off.Y != 0 || off.Z != 0);
 
+            // Doubled magnitude: /8 instead of /16. Empirically the renderer's pos shift lands
+            // the visual at half the requested world distance — same scale factor pattern we hit
+            // with mesh translation earlier. Doubling the input compensates so the visual lands
+            // exactly at the hitbox position for both closed and open states.
             Vec3d target = hasOffset
-                ? new Vec3d(pos.X + off.X / 16.0, pos.Y + off.Y / 16.0, pos.Z + off.Z / 16.0)
+                ? new Vec3d(pos.X + off.X / 8.0, pos.Y + off.Y / 8.0, pos.Z + off.Z / 8.0)
                 : new Vec3d(pos.X, pos.Y, pos.Z);
 
             posField.SetValue(renderer, target);
-
-            MoveDoorsModSystem.Logger?.Notification("[movedoors] set renderer.pos = " + target
-                + " (block at " + pos + ", offset " + (off?.ToString() ?? "none") + ")");
         }
     }
 }
