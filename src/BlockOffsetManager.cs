@@ -59,10 +59,36 @@ namespace MoveDoors
         {
             if (block == null) return false;
             if (block is BlockDoor || block is BlockFenceGate) return true;
-            // Trapdoor class name varies between VS versions — match by typename.
+
+            // Match by typename (covers BlockTrapdoor / variants).
             var tn = block.GetType().Name;
-            return tn.IndexOf("Trapdoor", StringComparison.OrdinalIgnoreCase) >= 0
-                || tn.IndexOf("TrapDoor", StringComparison.OrdinalIgnoreCase) >= 0;
+            if (tn.IndexOf("Door", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            if (tn.IndexOf("Gate", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            if (tn.IndexOf("Trapdoor", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+
+            // Match by block code path (game:door-oak, game:trapdoor-iron, game:fencegate-pine, …).
+            var path = block.Code?.Path;
+            if (!string.IsNullOrEmpty(path))
+            {
+                if (path.IndexOf("door", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+                if (path.IndexOf("trapdoor", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+                if (path.IndexOf("fencegate", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+                if (path.IndexOf("gate", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            }
+
+            // Match by attached block-entity behaviors — VS 1.22 doors carry BEBehaviorDoor.
+            if (block.BlockEntityBehaviors != null)
+            {
+                foreach (var bt in block.BlockEntityBehaviors)
+                {
+                    if (bt?.Name == null) continue;
+                    if (bt.Name.IndexOf("Door", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+                    if (bt.Name.IndexOf("Trapdoor", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+                    if (bt.Name.IndexOf("Gate", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+                }
+            }
+
+            return false;
         }
 
         // ----- Client → Server -----

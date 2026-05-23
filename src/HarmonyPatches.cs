@@ -1,3 +1,4 @@
+using System.Linq;
 using HarmonyLib;
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
@@ -59,20 +60,30 @@ namespace MoveDoors
     {
         public static bool Prefix(Block __instance, IWorldAccessor world, IPlayer byPlayer, ref bool __result)
         {
-            bool movable = BlockOffsetManager.IsMovable(__instance);
             bool held = WrenchHeld.IsHolding(byPlayer);
 
-            if (movable)
+            if (held)
             {
-                world.Logger.Notification("[movedoors] Block.OnBlockInteractStart "
-                    + __instance.GetType().Name + " held=" + held
-                    + " activeItem=" + (byPlayer?.InventoryManager?.ActiveHotbarSlot?.Itemstack?.Item?.Code?.ToString() ?? "null"));
+                // Log EVERY interact when the wrench is in hand, regardless of movable status,
+                // so we can see exactly what class the target block is.
+                bool movable = BlockOffsetManager.IsMovable(__instance);
+                var behaviorNames = __instance.BlockEntityBehaviors == null
+                    ? ""
+                    : string.Join(",", __instance.BlockEntityBehaviors.Select(b => b?.Name ?? "?"));
+                world.Logger.Notification("[movedoors] interact"
+                    + " class=" + __instance.GetType().Name
+                    + " code=" + __instance.Code
+                    + " movable=" + movable
+                    + " beBehaviors=[" + behaviorNames + "]");
+
+                if (movable)
+                {
+                    __result = false;
+                    return false;
+                }
             }
 
-            if (!held || !movable) return true;
-
-            __result = false;
-            return false;
+            return true;
         }
     }
 }
