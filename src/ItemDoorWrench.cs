@@ -24,13 +24,21 @@ namespace MoveDoors
             bool firstEvent,
             ref EnumHandHandling handling)
         {
+            var w = byEntity.World;
+            w.Logger.Notification("[movedoors] OnHeldInteractStart side=" + w.Side
+                + " first=" + firstEvent
+                + " blockSel=" + (blockSel?.Position?.ToString() ?? "null"));
+
             if (!firstEvent) return;
             if (blockSel == null) { handling = EnumHandHandling.NotHandled; return; }
 
             var world = byEntity.World;
             var block = world.BlockAccessor.GetBlock(blockSel.Position);
+            world.Logger.Notification("[movedoors] target block: " + block?.Code + " class=" + block?.GetType().Name);
+
             if (!BlockOffsetManager.IsMovable(block))
             {
+                world.Logger.Notification("[movedoors] block not movable; bailing");
                 handling = EnumHandHandling.NotHandled;
                 return;
             }

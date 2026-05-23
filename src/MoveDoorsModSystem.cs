@@ -29,11 +29,21 @@ namespace MoveDoors
         {
             api.RegisterItemClass("ItemDoorWrench", typeof(ItemDoorWrench));
 
+            api.Logger.Notification("[movedoors] starting v" + BuildInfo.Version + " " + BuildInfo.Sha + " (" + BuildInfo.Stamp + ") side=" + api.Side);
+
             harmony = new Harmony(HarmonyId);
-            harmony.PatchAll(typeof(MoveDoorsModSystem).Assembly);
+            try
+            {
+                harmony.PatchAll(typeof(MoveDoorsModSystem).Assembly);
+                api.Logger.Notification("[movedoors] PatchAll succeeded");
+            }
+            catch (System.Exception ex)
+            {
+                api.Logger.Error("[movedoors] PatchAll FAILED: " + ex);
+            }
+
             RuntimePatches.Apply(harmony, api.Logger);
 
-            // Dump what actually got patched, so we can tell from the log whether the prefixes wired up.
             foreach (var m in harmony.GetPatchedMethods())
             {
                 api.Logger.Notification("[movedoors] patched method: " + m.DeclaringType?.FullName + "." + m.Name);

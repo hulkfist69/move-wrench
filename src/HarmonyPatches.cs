@@ -74,15 +74,20 @@ namespace MoveDoors
     [HarmonyPatch(typeof(Block), nameof(Block.OnBlockInteractStart))]
     public static class Patch_Block_OnBlockInteractStart
     {
-        public static bool Prefix(Block __instance, IPlayer byPlayer, ref bool __result)
+        public static bool Prefix(Block __instance, IWorldAccessor world, IPlayer byPlayer, ref bool __result)
         {
-            if (!WrenchHeld.IsHolding(byPlayer)) return true;
-            if (!BlockOffsetManager.IsMovable(__instance)) return true;
+            bool movable = BlockOffsetManager.IsMovable(__instance);
+            bool held = WrenchHeld.IsHolding(byPlayer);
 
-            (byPlayer as Vintagestory.API.Server.IServerPlayer)?.SendMessage(
-                Vintagestory.API.Config.GlobalConstants.GeneralChatGroup,
-                "[movedoors] suppressed " + __instance.GetType().Name + " interact",
-                Vintagestory.API.Common.EnumChatType.Notification);
+            // Log every interact on a movable block so we can see the dispatch.
+            if (movable)
+            {
+                world.Logger.Notification("[movedoors] Block.OnBlockInteractStart "
+                    + __instance.GetType().Name + " held=" + held
+                    + " activeItem=" + (byPlayer?.InventoryManager?.ActiveHotbarSlot?.Itemstack?.Item?.Code?.ToString() ?? "null"));
+            }
+
+            if (!held || !movable) return true;
 
             __result = false;
             return false;
