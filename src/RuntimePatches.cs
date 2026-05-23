@@ -306,6 +306,52 @@ namespace MoveDoors
         private static FieldInfo selectionBackingField;
         private static PropertyInfo selectionProp;
         private static int retargetLogCount = 0;
+        private static bool playerDumped = false;
+
+        private static void DumpPlayerSelectionStructure(IPlayer player)
+        {
+            if (playerDumped) return;
+            playerDumped = true;
+
+            try
+            {
+                var t = player.GetType();
+                MoveDoorsModSystem.Logger?.Notification("[movedoors] player class: " + t.FullName);
+                MoveDoorsModSystem.Logger?.Notification("[movedoors] entity class: " + player.Entity?.GetType().FullName);
+
+                // Walk up the class hierarchy and dump all selection / pick related members.
+                Type cur = t;
+                while (cur != null && cur != typeof(object))
+                {
+                    foreach (var f in cur.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
+                    {
+                        var n = f.Name;
+                        if (n.IndexOf("Selection", StringComparison.OrdinalIgnoreCase) >= 0
+                            || n.IndexOf("Pick", StringComparison.OrdinalIgnoreCase) >= 0
+                            || n.IndexOf("Target", StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            MoveDoorsModSystem.Logger?.Notification("[movedoors] " + cur.Name + ".field " + f.Name + " : " + f.FieldType.Name);
+                        }
+                    }
+                    foreach (var p in cur.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
+                    {
+                        var n = p.Name;
+                        if (n.IndexOf("Selection", StringComparison.OrdinalIgnoreCase) >= 0
+                            || n.IndexOf("Pick", StringComparison.OrdinalIgnoreCase) >= 0
+                            || n.IndexOf("Target", StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            MoveDoorsModSystem.Logger?.Notification("[movedoors] " + cur.Name + ".prop " + p.Name + " : " + p.PropertyType.Name
+                                + " (get=" + (p.GetGetMethod(true) != null) + " set=" + (p.GetSetMethod(true) != null) + ")");
+                        }
+                    }
+                    cur = cur.BaseType;
+                }
+            }
+            catch (Exception ex)
+            {
+                MoveDoorsModSystem.Logger?.Warning("[movedoors] DumpPlayerSelectionStructure: " + ex.Message);
+            }
+        }
 
         public static void RetargetPlayerSelection(ICoreClientAPI capi)
         {
@@ -389,6 +435,8 @@ namespace MoveDoors
                         };
                     }
                 }
+
+                DumpPlayerSelectionStructure(player);
 
                 if (bestNew != null)
                 {
