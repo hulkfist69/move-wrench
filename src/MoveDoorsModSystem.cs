@@ -58,6 +58,8 @@ namespace MoveDoors
             Offsets.InitServer(sapi);
         }
 
+        private long retargetTickId;
+
         public override void StartClientSide(ICoreClientAPI capi)
         {
             this.capi = capi;
@@ -66,6 +68,10 @@ namespace MoveDoors
 
             capi.Input.RegisterHotKey(StepHotkey, Lang.Get("movedoors:hotkey-stepmode"), GlKeys.F, HotkeyType.GUIOrOtherControls);
             capi.Input.SetHotKeyHandler(StepHotkey, ToggleStepDialog);
+
+            // Per-frame retargeting of the player's CurrentBlockSelection: if their gaze ray
+            // hits a shifted door's bounding box closer than VS's current selection, replace it.
+            retargetTickId = capi.Event.RegisterGameTickListener(_ => RuntimePatches.RetargetPlayerSelection(capi), 0);
         }
 
         private bool ToggleStepDialog(KeyCombination _)
@@ -83,6 +89,11 @@ namespace MoveDoors
         {
             harmony?.UnpatchAll(HarmonyId);
             harmony = null;
+            if (capi != null && retargetTickId != 0)
+            {
+                capi.Event.UnregisterGameTickListener(retargetTickId);
+                retargetTickId = 0;
+            }
             stepDialog?.TryClose();
             stepDialog = null;
             RuntimePatches.ClearAll();
