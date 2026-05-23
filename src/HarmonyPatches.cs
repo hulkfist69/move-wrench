@@ -73,11 +73,21 @@ namespace MoveDoors
     [HarmonyPatch(typeof(Block), nameof(Block.OnBlockInteractStart))]
     public static class Patch_Block_OnBlockInteractStart
     {
+        private static int interactLogCount = 0;
+
         public static bool Prefix(Block __instance, IWorldAccessor world, IPlayer byPlayer, ref bool __result)
         {
-            bool held = WrenchHeld.IsHolding(byPlayer);
+            bool movable = BlockOffsetManager.IsMovable(__instance);
+            if (movable && interactLogCount < 8)
+            {
+                interactLogCount++;
+                MoveDoorsModSystem.Logger?.Notification("[movedoors] Block.OnBlockInteractStart fired: "
+                    + __instance.Code + " side=" + world.Side
+                    + " wrenchHeld=" + WrenchHeld.IsHolding(byPlayer));
+            }
 
-            if (held && BlockOffsetManager.IsMovable(__instance))
+            bool held = WrenchHeld.IsHolding(byPlayer);
+            if (held && movable)
             {
                 __result = false;
                 return false;

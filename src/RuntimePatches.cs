@@ -210,6 +210,8 @@ namespace MoveDoors
             }
         }
 
+        private static int wrenchLogCount = 0;
+
         // Dispatched per the client's current WrenchMode:
         //   - Rotate mode: pass through, let vanilla wrench rotation run.
         //   - Move1/2/4: if target is movable, apply offset and skip vanilla rotation.
@@ -221,6 +223,12 @@ namespace MoveDoors
             if (!firstEvent || blockSel == null) return true;
 
             var mode = MoveDoorsModSystem.GetClientMode();
+            if (wrenchLogCount < 8)
+            {
+                wrenchLogCount++;
+                MoveDoorsModSystem.Logger?.Notification("[movedoors] WrenchInteractPrefix fired: pos=" + blockSel.Position
+                    + " mode=" + mode + " side=" + byEntity.World.Side);
+            }
             if (mode == WrenchMode.Rotate) return true;
 
             var world = byEntity.World;
