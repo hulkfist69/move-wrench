@@ -306,6 +306,7 @@ namespace MoveDoors
         private static FieldInfo selectionBackingField;
         private static int retargetLogCount = 0;
         private static bool playerDumped = false;
+        private static readonly HashSet<BlockPos> doorBoxesDumped = new HashSet<BlockPos>();
 
         private static void DumpPlayerSelectionStructure(IPlayer player)
         {
@@ -413,6 +414,18 @@ namespace MoveDoors
                     var boxes = block.GetSelectionBoxes(capi.World.BlockAccessor, doorPos);
                     if (boxes == null) continue;
 
+                    if (!doorBoxesDumped.Contains(doorPos))
+                    {
+                        doorBoxesDumped.Add(doorPos);
+                        for (int bi = 0; bi < boxes.Length; bi++)
+                        {
+                            var b = boxes[bi];
+                            MoveDoorsModSystem.Logger?.Notification("[movedoors] door " + doorPos
+                                + " selBox[" + bi + "] = (" + b.X1.ToString("0.##") + "," + b.Y1.ToString("0.##") + "," + b.Z1.ToString("0.##")
+                                + ") - (" + b.X2.ToString("0.##") + "," + b.Y2.ToString("0.##") + "," + b.Z2.ToString("0.##") + ")");
+                        }
+                    }
+
                     foreach (var box in boxes)
                     {
                         Vec3d bMin = new Vec3d(box.X1 + doorPos.X, box.Y1 + doorPos.Y, box.Z1 + doorPos.Z);
@@ -462,12 +475,24 @@ namespace MoveDoors
                     if (selectionBackingField != null)
                     {
                         selectionBackingField.SetValue(entity, bestNew);
+
+                        // Diagnostic: read CurrentBlockSelection through IPlayer to verify the
+                        // public getter reflects our write. If it doesn't, the interaction
+                        // dispatch reads from a different source.
+                        if (retargetLogCount < 3)
+                        {
+                            var verify = player.CurrentBlockSelection;
+                            MoveDoorsModSystem.Logger?.Notification("[movedoors] after write: "
+                                + "entity.BlockSelection=" + ((BlockSelection)selectionBackingField.GetValue(entity))?.Position?.ToString()
+                                + " player.CurrentBlockSelection=" + verify?.Position?.ToString());
+                        }
                     }
 
                     if (retargetLogCount < 3)
                     {
                         retargetLogCount++;
-                        MoveDoorsModSystem.Logger?.Notification("[movedoors] retargeted selection to shifted door at " + bestNew.Position);
+                        MoveDoorsModSystem.Logger?.Notification("[movedoors] retargeted selection to shifted door at " + bestNew.Position
+                            + " face=" + bestNew.Face?.Code);
                     }
                 }
             }
