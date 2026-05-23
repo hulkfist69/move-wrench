@@ -1,7 +1,6 @@
 using HarmonyLib;
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
-using Vintagestory.GameContent;
 
 namespace MoveDoors
 {
@@ -13,7 +12,6 @@ namespace MoveDoors
         }
     }
 
-    // Helper for offset application to cuboid arrays.
     internal static class OffsetHelper
     {
         public static void Apply(BlockPos pos, ref Cuboidf[] boxes)
@@ -32,45 +30,30 @@ namespace MoveDoors
         }
     }
 
-    // BlockDoor: collision + selection offset.
-    [HarmonyPatch(typeof(BlockDoor), nameof(BlockDoor.GetCollisionBoxes))]
-    public static class Patch_BlockDoor_GetCollisionBoxes
+    // All patches target the base Block class — subclasses (BlockDoor, BlockTrapdoor, BlockFenceGate)
+    // inherit these methods without overriding them in VS 1.22. Each patch gates by IsMovable so we
+    // only affect doors/trapdoors/fence gates.
+
+    [HarmonyPatch(typeof(Block), nameof(Block.GetCollisionBoxes))]
+    public static class Patch_Block_GetCollisionBoxes
     {
-        public static void Postfix(IBlockAccessor blockAccessor, BlockPos pos, ref Cuboidf[] __result)
+        public static void Postfix(Block __instance, BlockPos pos, ref Cuboidf[] __result)
         {
+            if (!BlockOffsetManager.IsMovable(__instance)) return;
             OffsetHelper.Apply(pos, ref __result);
         }
     }
 
-    [HarmonyPatch(typeof(BlockDoor), nameof(BlockDoor.GetSelectionBoxes))]
-    public static class Patch_BlockDoor_GetSelectionBoxes
+    [HarmonyPatch(typeof(Block), nameof(Block.GetSelectionBoxes))]
+    public static class Patch_Block_GetSelectionBoxes
     {
-        public static void Postfix(IBlockAccessor blockAccessor, BlockPos pos, ref Cuboidf[] __result)
+        public static void Postfix(Block __instance, BlockPos pos, ref Cuboidf[] __result)
         {
+            if (!BlockOffsetManager.IsMovable(__instance)) return;
             OffsetHelper.Apply(pos, ref __result);
         }
     }
 
-    // BlockFenceGate: collision + selection offset.
-    [HarmonyPatch(typeof(BlockFenceGate), nameof(BlockFenceGate.GetCollisionBoxes))]
-    public static class Patch_BlockFenceGate_GetCollisionBoxes
-    {
-        public static void Postfix(IBlockAccessor blockAccessor, BlockPos pos, ref Cuboidf[] __result)
-        {
-            OffsetHelper.Apply(pos, ref __result);
-        }
-    }
-
-    [HarmonyPatch(typeof(BlockFenceGate), nameof(BlockFenceGate.GetSelectionBoxes))]
-    public static class Patch_BlockFenceGate_GetSelectionBoxes
-    {
-        public static void Postfix(IBlockAccessor blockAccessor, BlockPos pos, ref Cuboidf[] __result)
-        {
-            OffsetHelper.Apply(pos, ref __result);
-        }
-    }
-
-    // Global short-circuit on Block.OnBlockInteractStart.
     [HarmonyPatch(typeof(Block), nameof(Block.OnBlockInteractStart))]
     public static class Patch_Block_OnBlockInteractStart
     {
@@ -79,7 +62,6 @@ namespace MoveDoors
             bool movable = BlockOffsetManager.IsMovable(__instance);
             bool held = WrenchHeld.IsHolding(byPlayer);
 
-            // Log every interact on a movable block so we can see the dispatch.
             if (movable)
             {
                 world.Logger.Notification("[movedoors] Block.OnBlockInteractStart "
@@ -93,31 +75,4 @@ namespace MoveDoors
             return false;
         }
     }
-
-    // Belt-and-braces: BlockDoor often overrides OnBlockInteractStart, so the base-class patch
-    // above may not fire for door instances. Patch the override directly too.
-    [HarmonyPatch(typeof(BlockDoor), nameof(BlockDoor.OnBlockInteractStart))]
-    public static class Patch_BlockDoor_OnBlockInteractStart_Override
-    {
-        public static bool Prefix(IPlayer byPlayer, ref bool __result)
-        {
-            if (!WrenchHeld.IsHolding(byPlayer)) return true;
-            __result = false;
-            return false;
-        }
-    }
-
-    [HarmonyPatch(typeof(BlockFenceGate), nameof(BlockFenceGate.OnBlockInteractStart))]
-    public static class Patch_BlockFenceGate_OnBlockInteractStart_Override
-    {
-        public static bool Prefix(IPlayer byPlayer, ref bool __result)
-        {
-            if (!WrenchHeld.IsHolding(byPlayer)) return true;
-            __result = false;
-            return false;
-        }
-    }
-
-    // NOTE: Door mesh translation is wired via runtime reflection in RuntimePatches.Apply(...)
-    // so the build doesn't fail when BE class names differ between VS versions.
 }
