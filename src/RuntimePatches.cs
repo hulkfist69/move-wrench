@@ -175,30 +175,42 @@ namespace MoveDoors
             float dz = off.Z / 8f;
 
             var rotateField = AccessTools.Field(type, "RotateYRad");
-            float angle = rotateField?.GetValue(__instance) is float r ? r : 0f;
-            float cos = (float)Math.Cos(angle);
-            float sin = (float)Math.Sin(angle);
-            float invDx = dx * cos - dz * sin;
-            float invDz = dx * sin + dz * cos;
+            float animAngle = rotateField?.GetValue(__instance) is float r ? r : 0f;
 
-            // Also look up the facing — VS doors carry facingWhenClosed/Opened on the BE, and
-            // mesh-local axes might be oriented relative to the door's facing rather than world.
+            // Facing rotation (north=0, east=π/2, south=π, west=3π/2). This is the angle the
+            // renderer rotates the canonical-mesh by to face the door's actual world direction.
+            float facingAngle = 0f;
             string facingStr = "?";
             try
             {
-                var openedField2 = AccessTools.Field(type, "opened");
-                bool isOpen = openedField2?.GetValue(__instance) is bool ob2 && ob2;
-                var facingProp = AccessTools.Property(type, isOpen ? "facingWhenOpened" : "facingWhenClosed");
+                var facingProp = AccessTools.Property(type, opened ? "facingWhenOpened" : "facingWhenClosed");
                 var facing = facingProp?.GetValue(__instance);
-                facingStr = facing?.ToString() ?? "?";
+                if (facing != null)
+                {
+                    facingStr = facing.ToString() ?? "?";
+                    var idxProp = facing.GetType().GetProperty("HorizontalAngleIndex");
+                    if (idxProp?.GetValue(facing) is int hidx)
+                    {
+                        facingAngle = hidx * (float)(Math.PI / 2);
+                    }
+                }
             }
             catch { }
+
+            // Total rotation applied to mesh by renderer = facing + animation.
+            float totalAngle = facingAngle + animAngle;
+            float cos = (float)Math.Cos(totalAngle);
+            float sin = (float)Math.Sin(totalAngle);
+            float invDx = dx * cos - dz * sin;
+            float invDz = dx * sin + dz * cos;
 
             MoveDoorsModSystem.Logger?.Notification("[movedoors] mesh translate pos=" + pos
                 + " off=" + off
                 + " state=" + (opened ? "open" : "closed")
                 + " facing=" + facingStr
-                + " RotateYRad=" + angle.ToString("0.###")
+                + " facingAngle=" + facingAngle.ToString("0.###")
+                + " RotateYRad=" + animAngle.ToString("0.###")
+                + " total=" + totalAngle.ToString("0.###")
                 + " input(dx,dy,dz)=(" + dx.ToString("0.###") + "," + dy.ToString("0.###") + "," + dz.ToString("0.###") + ")"
                 + " applied(invDx,dy,invDz)=(" + invDx.ToString("0.###") + "," + dy.ToString("0.###") + "," + invDz.ToString("0.###") + ")");
 
