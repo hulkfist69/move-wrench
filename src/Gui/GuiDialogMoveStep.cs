@@ -1,7 +1,7 @@
+using System;
 using Cairo;
 using Vintagestory.API.Client;
 using Vintagestory.API.Config;
-using Vintagestory.API.MathTools;
 
 namespace MoveDoors
 {
@@ -9,7 +9,9 @@ namespace MoveDoors
     {
         public override string ToggleKeyCombinationCode => "movedoors:stepmode";
 
-        private static readonly int[] Steps = { 1, 2, 4 };
+        private static readonly WrenchMode[] Modes = {
+            WrenchMode.Rotate, WrenchMode.Move1, WrenchMode.Move2, WrenchMode.Move4
+        };
 
         public GuiDialogMoveStep(ICoreClientAPI capi) : base(capi)
         {
@@ -21,7 +23,7 @@ namespace MoveDoors
             const int cell = 72;
             const int gap = 10;
             const int padding = 14;
-            int innerW = Steps.Length * cell + (Steps.Length - 1) * gap;
+            int innerW = Modes.Length * cell + (Modes.Length - 1) * gap;
             int innerH = cell + 16;
 
             var dialogBounds = ElementStdBounds.AutosizedMainDialog.WithAlignment(EnumDialogArea.CenterMiddle);
@@ -33,39 +35,35 @@ namespace MoveDoors
                 .AddDialogTitleBar(Lang.Get("movedoors:stepmode-title"), OnTitleBarClose)
                 .BeginChildElements(bgBounds);
 
-            for (int i = 0; i < Steps.Length; i++)
+            for (int i = 0; i < Modes.Length; i++)
             {
-                int s = Steps[i];
+                var mode = Modes[i];
                 double x = padding + i * (cell + gap);
                 double y = padding + 30;
                 var bounds = ElementBounds.Fixed(x, y, cell, cell);
 
                 composer.AddDynamicCustomDraw(bounds,
-                    (ctx, surface, b) => DrawTile(ctx, b, s, GetClientStepSafe() == s),
-                    "tile-" + s);
+                    (ctx, surface, b) => DrawTile(ctx, b, mode, MoveDoorsModSystem.GetClientMode() == mode),
+                    "tile-" + (int)mode);
 
-                composer.AddSmallButton("", () => { OnPick(s); return true; },
-                    bounds, EnumButtonStyle.None, "btn-" + s);
+                composer.AddSmallButton("", () => { OnPick(mode); return true; },
+                    bounds, EnumButtonStyle.None, "btn-" + (int)mode);
             }
 
             composer.EndChildElements();
             SingleComposer = composer.Compose();
         }
 
-        private static int GetClientStepSafe() => MoveDoorsModSystem.GetClientStep();
-
-        private void OnPick(int s)
+        private void OnPick(WrenchMode m)
         {
-            MoveDoorsModSystem.SetClientStep(s);
-            // Redraw all tiles so the selected highlight updates.
-            foreach (var step in Steps)
+            MoveDoorsModSystem.SetClientMode(m);
+            foreach (var mode in Modes)
             {
-                var elem = SingleComposer.GetCustomDraw("tile-" + step);
-                elem?.Redraw();
+                SingleComposer.GetCustomDraw("tile-" + (int)mode)?.Redraw();
             }
         }
 
-        private void DrawTile(Context ctx, ElementBounds bounds, int step, bool selected)
+        private void DrawTile(Context ctx, ElementBounds bounds, WrenchMode mode, bool selected)
         {
             double w = bounds.InnerWidth;
             double h = bounds.InnerHeight;
@@ -75,39 +73,66 @@ namespace MoveDoors
             RoundRect(ctx, 0, 0, w, h, 6);
             ctx.Fill();
 
-            // Selected border (gold) or idle border (gray).
+            // Border (gold if selected).
             if (selected) ctx.SetSourceRGBA(1.0, 0.78, 0.22, 1.0);
             else ctx.SetSourceRGBA(0.45, 0.45, 0.45, 1.0);
             ctx.LineWidth = selected ? 3.0 : 1.5;
             RoundRect(ctx, 1, 1, w - 2, h - 2, 6);
             ctx.Stroke();
 
-            // Chisel-style voxel grid: N×N where N = 16 / step.
-            int n = 16 / step;
-            double gridSize = System.Math.Min(w, h) - 22;
-            double gx = (w - gridSize) / 2;
-            double gy = (h - gridSize) / 2 - 3;
+            // Icon area (room for label below).
+            double iconSize = Math.Min(w, h) - 22;
+            double ix = (w - iconSize) / 2;
+            double iy = (h - iconSize) / 2 - 3;
 
+            if (mode == WrenchMode.Rotate)
+            {
+                DrawRotateIcon(ctx, ix, iy, iconSize);
+            }
+            else
+            {
+                int n = mode switch { WrenchMode.Move1 => 16, WrenchMode.Move2 => 8, WrenchMode.Move4 => 4, _ => 16 };
+                DrawMoveIcon(ctx, ix, iy, iconSize, n);
+            }
+
+            // Label.
+            ctx.SetSourceRGBA(1, 1, 1, 0.92);
+            ctx.SelectFontFace("sans-serif", FontSlant.Normal, FontWeight.Bold);
+            ctx.SetFontSize(13);
+            string label = mode switch {
+                WrenchMode.Rotate => "Rotate",
+                WrenchMode.Move1 => "1/16",
+                WrenchMode.Move2 => "2/16",
+                WrenchMode.Move4 => "4/16",
+                _ => "?"
+            };
+            var ext = ctx.TextExtents(label);
+            ctx.MoveTo((w - ext.Width) / 2, h - 6);
+            ctx.ShowText(label);
+        }
+
+        private static void DrawMoveIcon(Context ctx, double ox, double oy, double size, int n)
+        {
+            // Voxel grid (n×n) — chisel-style.
             ctx.SetSourceRGBA(0.82, 0.82, 0.85, 0.85);
             ctx.LineWidth = 1.0;
-            double cell = gridSize / n;
+            double cell = size / n;
             for (int i = 0; i <= n; i++)
             {
-                ctx.MoveTo(gx + i * cell, gy);
-                ctx.LineTo(gx + i * cell, gy + gridSize);
-                ctx.MoveTo(gx, gy + i * cell);
-                ctx.LineTo(gx + gridSize, gy + i * cell);
+                ctx.MoveTo(ox + i * cell, oy);
+                ctx.LineTo(ox + i * cell, oy + size);
+                ctx.MoveTo(ox, oy + i * cell);
+                ctx.LineTo(ox + size, oy + i * cell);
             }
             ctx.Stroke();
 
             // 4-way arrow overlay.
-            double cx = gx + gridSize / 2;
-            double cy = gy + gridSize / 2;
-            double r = gridSize * 0.34;
+            double cx = ox + size / 2;
+            double cy = oy + size / 2;
+            double r = size * 0.34;
 
             ctx.SetSourceRGBA(1.0, 0.85, 0.30, 0.95);
             ctx.LineWidth = 2.4;
-
             ctx.MoveTo(cx - r, cy); ctx.LineTo(cx + r, cy);
             ctx.MoveTo(cx, cy - r); ctx.LineTo(cx, cy + r);
             ctx.Stroke();
@@ -118,15 +143,32 @@ namespace MoveDoors
             ctx.MoveTo(cx, cy - r); ctx.LineTo(cx - a, cy - r + a); ctx.LineTo(cx + a, cy - r + a); ctx.ClosePath();
             ctx.MoveTo(cx, cy + r); ctx.LineTo(cx - a, cy + r - a); ctx.LineTo(cx + a, cy + r - a); ctx.ClosePath();
             ctx.Fill();
+        }
 
-            // Label.
-            ctx.SetSourceRGBA(1, 1, 1, 0.92);
-            ctx.SelectFontFace("sans-serif", FontSlant.Normal, FontWeight.Bold);
-            ctx.SetFontSize(13);
-            string label = step + "/16";
-            var ext = ctx.TextExtents(label);
-            ctx.MoveTo((w - ext.Width) / 2, h - 6);
-            ctx.ShowText(label);
+        private static void DrawRotateIcon(Context ctx, double ox, double oy, double size)
+        {
+            double cx = ox + size / 2;
+            double cy = oy + size / 2;
+            double r = size * 0.34;
+
+            ctx.SetSourceRGBA(1.0, 0.85, 0.30, 0.95);
+            ctx.LineWidth = 3.0;
+
+            // Circular arrow (3/4 arc).
+            ctx.Arc(cx, cy, r, Math.PI * 0.15, Math.PI * 1.5);
+            ctx.Stroke();
+
+            // Arrowhead at the end of the arc.
+            double endAngle = Math.PI * 1.5;
+            double ex = cx + r * Math.Cos(endAngle);
+            double ey = cy + r * Math.Sin(endAngle);
+            double a = r * 0.45;
+
+            ctx.MoveTo(ex, ey);
+            ctx.LineTo(ex - a, ey - a * 0.55);
+            ctx.LineTo(ex - a * 0.5, ey + a);
+            ctx.ClosePath();
+            ctx.Fill();
         }
 
         private static void RoundRect(Context ctx, double x, double y, double w, double h, double r)

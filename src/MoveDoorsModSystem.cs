@@ -6,6 +6,8 @@ using Vintagestory.API.Server;
 
 namespace MoveDoors
 {
+    public enum WrenchMode { Rotate, Move1, Move2, Move4 }
+
     public class MoveDoorsModSystem : ModSystem
     {
         public const string HarmonyId = "movedoors.patches";
@@ -19,17 +21,21 @@ namespace MoveDoors
         public static BlockOffsetManager Offsets { get; private set; }
         public static ILogger Logger { get; private set; }
 
-        private static int clientStep = 1;
-        public static int GetClientStep() => clientStep;
-        public static void SetClientStep(int s)
+        private static WrenchMode clientMode = WrenchMode.Rotate;
+        public static WrenchMode GetClientMode() => clientMode;
+        public static void SetClientMode(WrenchMode m) => clientMode = m;
+
+        public static int GetClientStep() => clientMode switch
         {
-            if (s == 1 || s == 2 || s == 4) clientStep = s;
-        }
+            WrenchMode.Move1 => 1,
+            WrenchMode.Move2 => 2,
+            WrenchMode.Move4 => 4,
+            _ => 0
+        };
 
         public override void Start(ICoreAPI api)
         {
             Logger = api.Logger;
-
             api.Logger.Notification("[movedoors] starting v" + BuildInfo.Version + " " + BuildInfo.Sha + " (" + BuildInfo.Stamp + ") side=" + api.Side);
 
             harmony = new Harmony(HarmonyId);
@@ -44,11 +50,6 @@ namespace MoveDoors
             }
 
             RuntimePatches.Apply(harmony, api.Logger);
-
-            foreach (var m in harmony.GetPatchedMethods())
-            {
-                api.Logger.Notification("[movedoors] patched method: " + m.DeclaringType?.FullName + "." + m.Name);
-            }
         }
 
         public override void StartServerSide(ICoreServerAPI sapi)
@@ -70,8 +71,6 @@ namespace MoveDoors
         private bool ToggleStepDialog(KeyCombination _)
         {
             if (capi == null) return false;
-
-            // F only opens the picker when the player is holding a wrench.
             if (!WrenchHeld.IsHolding(capi.World.Player)) return false;
 
             if (stepDialog == null) stepDialog = new GuiDialogMoveStep(capi);
@@ -86,6 +85,7 @@ namespace MoveDoors
             harmony = null;
             stepDialog?.TryClose();
             stepDialog = null;
+            RuntimePatches.ClearAll();
             Offsets = null;
         }
     }

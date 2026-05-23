@@ -247,12 +247,21 @@ namespace MoveDoors
 
         private void OnSync(BlockOffsetSyncPacket pkt)
         {
+            // Wipe any prior cached baselines — they belonged to the old session's offsets.
+            RuntimePatches.ClearAll();
             Offsets.Clear();
+
             if (pkt?.Entries == null) return;
             foreach (var e in pkt.Entries)
             {
-                Offsets[new BlockPos(e.X, e.Y, e.Z)] = new Vec3i(e.OffX, e.OffY, e.OffZ);
-                capi?.World.BlockAccessor.MarkBlockDirty(new BlockPos(e.X, e.Y, e.Z));
+                var p = new BlockPos(e.X, e.Y, e.Z);
+                Offsets[p] = new Vec3i(e.OffX, e.OffY, e.OffZ);
+                capi?.World.BlockAccessor.MarkBlockDirty(p);
+                capi?.World.BlockAccessor.MarkBlockEntityDirty(p);
+                // Also apply the offset directly to whichever BE is already loaded at this pos.
+                // Fixes the "have to right-click every door after world reload" bug — chunks that
+                // were loaded before sync arrived won't re-tess on their own.
+                if (capi != null) RuntimePatches.ForceApplyAt(capi.World, p);
             }
         }
 
