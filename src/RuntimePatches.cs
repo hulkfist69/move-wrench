@@ -304,7 +304,6 @@ namespace MoveDoors
 
         private static bool selectionFieldResolved = false;
         private static FieldInfo selectionBackingField;
-        private static PropertyInfo selectionProp;
         private static int retargetLogCount = 0;
         private static bool playerDumped = false;
 
@@ -449,13 +448,12 @@ namespace MoveDoors
                         selectionFieldResolved = true;
                         // VS 1.22 stores the player's selected block on the EntityPlayer as a
                         // public field named "BlockSelection".
-                        var eType = entity.GetType();
-                        Type cur = eType;
-                        while (cur != null && cur != typeof(object) && selectionBackingField == null)
+                        Type walk = entity.GetType();
+                        while (walk != null && walk != typeof(object) && selectionBackingField == null)
                         {
-                            selectionBackingField = cur.GetField("BlockSelection",
+                            selectionBackingField = walk.GetField("BlockSelection",
                                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
-                            cur = cur.BaseType;
+                            walk = walk.BaseType;
                         }
                         MoveDoorsModSystem.Logger?.Notification("[movedoors] selection writer: "
                             + (selectionBackingField != null ? "entity field " + selectionBackingField.Name : "NONE FOUND"));
