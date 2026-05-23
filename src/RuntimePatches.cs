@@ -16,7 +16,41 @@ namespace MoveDoors
         {
             TryPatchBoxes(harmony, logger, "Vintagestory.GameContent.BlockTrapDoor");
             TryPatchBoxes(harmony, logger, "Vintagestory.GameContent.BlockTrapdoor");
+            TryPatchTrapdoorInteract(harmony, logger, "Vintagestory.GameContent.BlockTrapDoor");
+            TryPatchTrapdoorInteract(harmony, logger, "Vintagestory.GameContent.BlockTrapdoor");
             TryPatchDoorMesh(harmony, logger);
+        }
+
+        private static void TryPatchTrapdoorInteract(Harmony harmony, ILogger logger, string typeName)
+        {
+            try
+            {
+                var type = ResolveType(typeName);
+                if (type == null) return;
+
+                var method = AccessTools.Method(type, "OnBlockInteractStart",
+                    new[] { typeof(IWorldAccessor), typeof(IPlayer), typeof(BlockSelection) });
+                if (method == null) return;
+
+                var prefix = new HarmonyMethod(typeof(RuntimePatches).GetMethod(nameof(InteractPrefix),
+                    BindingFlags.Static | BindingFlags.NonPublic));
+                harmony.Patch(method, prefix: prefix);
+                logger.Notification("[movedoors] patched " + typeName + ".OnBlockInteractStart");
+            }
+            catch (Exception ex)
+            {
+                logger.Warning("[movedoors] TryPatchTrapdoorInteract(" + typeName + ") failed: " + ex.Message);
+            }
+        }
+
+        private static bool InteractPrefix(IPlayer byPlayer, ref bool __result)
+        {
+            if (WrenchHeld.IsHolding(byPlayer))
+            {
+                __result = false;
+                return false;
+            }
+            return true;
         }
 
         private static void TryPatchBoxes(Harmony harmony, ILogger logger, string typeName)

@@ -5,6 +5,14 @@ using Vintagestory.GameContent;
 
 namespace MoveDoors
 {
+    internal static class WrenchHeld
+    {
+        public static bool IsHolding(IPlayer player)
+        {
+            return player?.InventoryManager?.ActiveHotbarSlot?.Itemstack?.Item is ItemDoorWrench;
+        }
+    }
+
     // Helper for offset application to cuboid arrays.
     internal static class OffsetHelper
     {
@@ -24,7 +32,7 @@ namespace MoveDoors
         }
     }
 
-    // BlockDoor: collision + selection offset (compile-safe baseline).
+    // BlockDoor: collision + selection offset.
     [HarmonyPatch(typeof(BlockDoor), nameof(BlockDoor.GetCollisionBoxes))]
     public static class Patch_BlockDoor_GetCollisionBoxes
     {
@@ -62,7 +70,36 @@ namespace MoveDoors
         }
     }
 
-    // NOTE: Door visual mesh translation and trapdoor support are wired via runtime reflection in
-    // RuntimePatches.Apply(...) rather than [HarmonyPatch] attributes, so the build doesn't fail
-    // when class names differ between VS versions.
+    // Suppress the block's own right-click handler when the player is holding the wrench.
+    // Otherwise the door opens/closes before our item handler runs.
+    [HarmonyPatch(typeof(BlockDoor), nameof(BlockDoor.OnBlockInteractStart))]
+    public static class Patch_BlockDoor_OnBlockInteractStart
+    {
+        public static bool Prefix(IPlayer byPlayer, ref bool __result)
+        {
+            if (WrenchHeld.IsHolding(byPlayer))
+            {
+                __result = false;
+                return false; // skip original
+            }
+            return true;
+        }
+    }
+
+    [HarmonyPatch(typeof(BlockFenceGate), nameof(BlockFenceGate.OnBlockInteractStart))]
+    public static class Patch_BlockFenceGate_OnBlockInteractStart
+    {
+        public static bool Prefix(IPlayer byPlayer, ref bool __result)
+        {
+            if (WrenchHeld.IsHolding(byPlayer))
+            {
+                __result = false;
+                return false;
+            }
+            return true;
+        }
+    }
+
+    // NOTE: Trapdoor interact suppression + door mesh translation are wired via runtime reflection
+    // in RuntimePatches.Apply(...) so the build doesn't fail when class names differ between VS versions.
 }
