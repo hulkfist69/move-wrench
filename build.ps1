@@ -1,0 +1,41 @@
+# Move Wrench — Windows build + package
+# Requires: .NET 7 SDK, VINTAGE_STORY env var pointing at the VS install dir.
+# Output: dist/MoveWrench-<version>.zip ready to drop into %APPDATA%\VintagestoryData\Mods\
+
+$ErrorActionPreference = "Stop"
+
+if (-not $env:VINTAGE_STORY) {
+    Write-Error "VINTAGE_STORY env var not set. Run: setx VINTAGE_STORY `"C:\path\to\Vintagestory`" (then reopen terminal)"
+}
+
+$root    = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$modinfo = Get-Content (Join-Path $root "modinfo.json") | ConvertFrom-Json
+$version = $modinfo.version
+$modid   = $modinfo.modid
+
+$stage = Join-Path $root "dist\stage"
+$dist  = Join-Path $root "dist"
+$zip   = Join-Path $dist "MoveWrench-$version.zip"
+
+Write-Host "Building MoveDoors.dll (Release)..." -ForegroundColor Cyan
+dotnet build -c Release (Join-Path $root "MoveDoors.csproj")
+if ($LASTEXITCODE -ne 0) { Write-Error "dotnet build failed" }
+
+$dll = Join-Path $root "bin\Release\MoveDoors.dll"
+if (-not (Test-Path $dll)) { Write-Error "Build output not found at $dll" }
+
+Write-Host "Staging mod files..." -ForegroundColor Cyan
+if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
+New-Item -ItemType Directory -Force -Path $stage | Out-Null
+
+Copy-Item $dll                          (Join-Path $stage "MoveDoors.dll")
+Copy-Item (Join-Path $root "modinfo.json") (Join-Path $stage "modinfo.json")
+Copy-Item -Recurse (Join-Path $root "assets") (Join-Path $stage "assets")
+
+if (Test-Path $zip) { Remove-Item $zip }
+
+Write-Host "Zipping to $zip ..." -ForegroundColor Cyan
+Compress-Archive -Path (Join-Path $stage "*") -DestinationPath $zip -Force
+
+Write-Host "Done: $zip" -ForegroundColor Green
+Write-Host "Install: copy `"$zip`" `"$env:APPDATA\VintagestoryData\Mods\`""

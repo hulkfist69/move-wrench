@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Move Wrench — Mac/Linux build + package
+# Requires: .NET 7 SDK, VINTAGE_STORY env var pointing at the VS install dir.
+# Output: dist/MoveWrench-<version>.zip ready to drop into the Mods folder.
+
+set -euo pipefail
+
+if [[ -z "${VINTAGE_STORY:-}" ]]; then
+  echo "VINTAGE_STORY env var not set. Example:"
+  echo "  export VINTAGE_STORY=\"/Applications/Vintagestory.app/Contents/Resources\""
+  exit 1
+fi
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+version=$(grep -E '"version"' "$root/modinfo.json" | head -n1 | sed -E 's/.*"version" *: *"([^"]+)".*/\1/')
+
+stage="$root/dist/stage"
+dist="$root/dist"
+zip="$dist/MoveWrench-$version.zip"
+
+echo "Building MoveDoors.dll (Release)..."
+dotnet build -c Release "$root/MoveDoors.csproj"
+
+dll="$root/bin/Release/MoveDoors.dll"
+[[ -f "$dll" ]] || { echo "Build output missing: $dll" >&2; exit 1; }
+
+echo "Staging mod files..."
+rm -rf "$stage"
+mkdir -p "$stage"
+
+cp "$dll"                  "$stage/MoveDoors.dll"
+cp "$root/modinfo.json"    "$stage/modinfo.json"
+cp -R "$root/assets"       "$stage/assets"
+
+rm -f "$zip"
+echo "Zipping to $zip ..."
+( cd "$stage" && zip -rq "$zip" . )
+
+echo "Done: $zip"

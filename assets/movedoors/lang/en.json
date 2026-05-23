@@ -1,0 +1,9 @@
+{
+  "item-doorwrench": "Move Wrench",
+  "item-doorwrench-desc": "Right-click a door, trapdoor, or fence gate face to shift it toward that face by the active step (1/2/4/8 voxels). Sneak + right-click to snap back to alignment. Connected doors move as a group. Press F to choose step size.",
+  "movedoors:heldhelp-shift": "Shift block toward clicked face",
+  "movedoors:heldhelp-reset": "Reset block to aligned position",
+  "movedoors:heldhelp-step": "Open step-size selector",
+  "movedoors:hotkey-stepmode": "Move Wrench: step size",
+  "movedoors:stepmode-title": "Move Step Size"
+}

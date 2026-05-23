@@ -1,0 +1,25 @@
+{
+  "code": "doorwrench",
+  "class": "ItemDoorWrench",
+  "shape": { "base": "movedoors:item/doorwrench" },
+  "textures": {
+    "wrench": { "base": "movedoors:item/doorwrench" }
+  },
+  "creativeinventory": { "general": ["*"], "tools": ["*"] },
+  "maxstacksize": 1,
+  "heldTpHitAnimation": "tooluse",
+  "heldTpUseAnimation": "interactstatic",
+  "guiTransform": {
+    "rotate": { "x": 0, "y": -45, "z": 25 },
+    "scale": 1.5
+  },
+  "fpHandTransform": {
+    "translation": { "x": -0.6, "y": -0.3, "z": -0.3 },
+    "rotation": { "x": 0, "y": 0, "z": 45 }
+  },
+  "tpHandTransform": {
+    "translation": { "x": -1.0, "y": -0.4, "z": -0.5 },
+    "rotation": { "x": 0, "y": 0, "z": 45 },
+    "scale": 0.6
+  }
+}
