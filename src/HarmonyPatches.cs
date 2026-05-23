@@ -74,6 +74,7 @@ namespace MoveDoors
     public static class Patch_Block_OnBlockInteractStart
     {
         private static int interactLogCount = 0;
+        private static int postfixLogCount = 0;
 
         public static bool Prefix(Block __instance, IWorldAccessor world, IPlayer byPlayer, ref bool __result)
         {
@@ -81,9 +82,12 @@ namespace MoveDoors
             if (movable && interactLogCount < 8)
             {
                 interactLogCount++;
+                var sel = byPlayer?.CurrentBlockSelection;
                 MoveDoorsModSystem.Logger?.Notification("[movedoors] Block.OnBlockInteractStart fired: "
                     + __instance.Code + " side=" + world.Side
-                    + " wrenchHeld=" + WrenchHeld.IsHolding(byPlayer));
+                    + " wrenchHeld=" + WrenchHeld.IsHolding(byPlayer)
+                    + " sel.Pos=" + sel?.Position?.ToString()
+                    + " sel.HitPos=" + sel?.HitPosition?.ToString());
             }
 
             bool held = WrenchHeld.IsHolding(byPlayer);
@@ -94,6 +98,16 @@ namespace MoveDoors
             }
 
             return true;
+        }
+
+        public static void Postfix(Block __instance, IWorldAccessor world, IPlayer byPlayer, ref bool __result)
+        {
+            if (BlockOffsetManager.IsMovable(__instance) && postfixLogCount < 8)
+            {
+                postfixLogCount++;
+                MoveDoorsModSystem.Logger?.Notification("[movedoors] Block.OnBlockInteractStart returned: "
+                    + __result + " (door=" + __instance.Code + " side=" + world.Side + ")");
+            }
         }
     }
 

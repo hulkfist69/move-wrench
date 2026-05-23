@@ -449,11 +449,17 @@ namespace MoveDoors
                         );
 
                         bestT = t;
+                        // VS expects HitPosition to be in block-local 0..1 space. The actual
+                        // hit point may be in a neighbor cell, so clamp it back into the door's
+                        // grid cell — interact handlers often validate this range.
+                        double hpx = Math.Max(0, Math.Min(1, hitWorld.X - doorPos.X));
+                        double hpy = Math.Max(0, Math.Min(1, hitWorld.Y - doorPos.Y));
+                        double hpz = Math.Max(0, Math.Min(1, hitWorld.Z - doorPos.Z));
                         bestNew = new BlockSelection
                         {
                             Position = doorPos.Copy(),
                             Face = face,
-                            HitPosition = new Vec3d(hitWorld.X - doorPos.X, hitWorld.Y - doorPos.Y, hitWorld.Z - doorPos.Z),
+                            HitPosition = new Vec3d(hpx, hpy, hpz),
                             DidOffset = false,
                             Block = block
                         };
