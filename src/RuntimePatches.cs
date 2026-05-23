@@ -319,7 +319,7 @@ namespace MoveDoors
 
             try
             {
-                var entPos = entity.SidedPos ?? entity.Pos;
+                var entPos = entity.Pos;
                 Vec3d eyePos = new Vec3d(entPos.X, entPos.Y + entity.LocalEyePos.Y, entPos.Z);
 
                 double yaw = entPos.Yaw;
