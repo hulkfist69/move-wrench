@@ -74,7 +74,11 @@ namespace MoveDoors
                 var f = AccessTools.Field(__instance.GetType(), fname);
                 if (f?.GetValue(__instance) is MeshData md)
                 {
-                    md.Translate(dx, dy, dz);
+                    // Clone before translating — VS caches meshes per door type/state, and
+                    // translating in place would mutate every door sharing that cached mesh.
+                    var clone = md.Clone();
+                    clone.Translate(dx, dy, dz);
+                    f.SetValue(__instance, clone);
                     return;
                 }
             }

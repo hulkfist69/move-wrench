@@ -135,6 +135,7 @@ namespace MoveDoors
             {
                 sapi.World.BlockAccessor.MarkBlockDirty(p);
                 sapi.World.BlockAccessor.MarkBlockEntityDirty(p);
+                sapi.World.BlockAccessor.TriggerNeighbourBlockUpdate(p);
             }
         }
 
@@ -235,6 +236,7 @@ namespace MoveDoors
 
             capi?.World.BlockAccessor.MarkBlockDirty(pos);
             capi?.World.BlockAccessor.MarkBlockEntityDirty(pos);
+            capi?.World.BlockAccessor.TriggerNeighbourBlockUpdate(pos);
         }
 
         // ----- Persistence -----

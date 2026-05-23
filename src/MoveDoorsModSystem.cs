@@ -17,6 +17,7 @@ namespace MoveDoors
         private GuiDialogMoveStep stepDialog;
 
         public static BlockOffsetManager Offsets { get; private set; }
+        public static ILogger Logger { get; private set; }
 
         private static int clientStep = 1;
         public static int GetClientStep() => clientStep;
@@ -27,6 +28,7 @@ namespace MoveDoors
 
         public override void Start(ICoreAPI api)
         {
+            Logger = api.Logger;
             api.RegisterItemClass("ItemDoorWrench", typeof(ItemDoorWrench));
 
             api.Logger.Notification("[movedoors] starting v" + BuildInfo.Version + " " + BuildInfo.Sha + " (" + BuildInfo.Stamp + ") side=" + api.Side);

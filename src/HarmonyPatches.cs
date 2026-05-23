@@ -41,6 +41,13 @@ namespace MoveDoors
         public static void Postfix(Block __instance, BlockPos pos, ref Cuboidf[] __result)
         {
             if (!BlockOffsetManager.IsMovable(__instance)) return;
+            var off = MoveDoorsModSystem.Offsets?.Get(pos);
+            if (off != null && (off.X != 0 || off.Y != 0 || off.Z != 0))
+            {
+                MoveDoorsModSystem.Logger?.Notification("[movedoors] GetCollisionBoxes call for "
+                    + __instance.GetType().Name + " at " + pos + " off=" + off
+                    + " resultBoxes=" + (__result?.Length ?? 0));
+            }
             OffsetHelper.Apply(pos, ref __result);
         }
     }
