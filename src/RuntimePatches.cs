@@ -150,7 +150,6 @@ namespace MoveDoors
             if (meshField == null) return;
             if (meshField.GetValue(__instance) is not MeshData currentMesh) return;
 
-            // Read the BE's opened state — the baseline mesh differs between closed/open.
             var openedField = AccessTools.Field(type, "opened");
             bool opened = openedField?.GetValue(__instance) is bool ob && ob;
 
@@ -161,23 +160,36 @@ namespace MoveDoors
 
             if (!hasOffset)
             {
-                // No offset for this pos — drop any stored baseline (door isn't being moved any more).
                 baselineMeshes.Remove(key);
                 return;
             }
 
-            // Establish baseline. If we don't have one for this (pos, opened) yet, the current mesh
-            // is presumed fresh — store a clone of it.
             if (!baselineMeshes.TryGetValue(key, out var baseline))
             {
                 baseline = currentMesh.Clone();
                 baselineMeshes[key] = baseline;
             }
 
-            // Always translate FROM the stored baseline, never from the current field value (which
-            // may already be our translated clone).
+            // Mesh-vs-hitbox alignment: cuboids live in world space (and our ColSelBoxes postfix
+            // translates them directly by world offset). Mesh data lives in mesh-local space, and
+            // the renderer rotates the mesh by RotateYRad around the Y axis before placing it at
+            // the BE's pos. So a direct mesh.Translate(world_offset) would put the visual at the
+            // wrong world position for any non-north-facing door (anything with RotateYRad != 0).
+            // Pre-apply the inverse rotation so that after the renderer's forward rotation the
+            // visual ends up exactly aligned with the hitbox.
+            var rotateField = AccessTools.Field(type, "RotateYRad");
+            float angle = rotateField?.GetValue(__instance) is float r ? r : 0f;
+            float cos = (float)Math.Cos(angle);
+            float sin = (float)Math.Sin(angle);
+
+            float worldDx = off.X / 16f;
+            float worldDy = off.Y / 16f;
+            float worldDz = off.Z / 16f;
+            float meshDx = worldDx * cos - worldDz * sin;
+            float meshDz = worldDx * sin + worldDz * cos;
+
             var translated = baseline.Clone();
-            translated.Translate(off.X / 16f, off.Y / 16f, off.Z / 16f);
+            translated.Translate(meshDx, worldDy, meshDz);
             meshField.SetValue(__instance, translated);
         }
     }
