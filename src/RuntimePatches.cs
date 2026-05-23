@@ -170,24 +170,37 @@ namespace MoveDoors
                 baselineMeshes[key] = baseline;
             }
 
-            // Mesh-local translation amount: doubled (/8 instead of /16) because VS's door render
-            // pipeline halves the effective translation magnitude — empirically confirmed in the
-            // closed state.
             float dx = off.X / 8f;
             float dy = off.Y / 8f;
             float dz = off.Z / 8f;
 
-            // Inverse-rotate by the door's current Y-axis angle so that after the renderer's
-            // forward rotation (RotateYRad, which is non-zero in the open state and during the
-            // swing animation), the visual ends up at the same world position as the hitbox.
-            // For closed state (RotateYRad ≈ 0) this reduces to identity, matching v0.3.13's
-            // working closed-state behavior.
             var rotateField = AccessTools.Field(type, "RotateYRad");
             float angle = rotateField?.GetValue(__instance) is float r ? r : 0f;
             float cos = (float)Math.Cos(angle);
             float sin = (float)Math.Sin(angle);
             float invDx = dx * cos - dz * sin;
             float invDz = dx * sin + dz * cos;
+
+            // Also look up the facing — VS doors carry facingWhenClosed/Opened on the BE, and
+            // mesh-local axes might be oriented relative to the door's facing rather than world.
+            string facingStr = "?";
+            try
+            {
+                var openedField2 = AccessTools.Field(type, "opened");
+                bool isOpen = openedField2?.GetValue(__instance) is bool ob2 && ob2;
+                var facingProp = AccessTools.Property(type, isOpen ? "facingWhenOpened" : "facingWhenClosed");
+                var facing = facingProp?.GetValue(__instance);
+                facingStr = facing?.ToString() ?? "?";
+            }
+            catch { }
+
+            MoveDoorsModSystem.Logger?.Notification("[movedoors] mesh translate pos=" + pos
+                + " off=" + off
+                + " state=" + (opened ? "open" : "closed")
+                + " facing=" + facingStr
+                + " RotateYRad=" + angle.ToString("0.###")
+                + " input(dx,dy,dz)=(" + dx.ToString("0.###") + "," + dy.ToString("0.###") + "," + dz.ToString("0.###") + ")"
+                + " applied(invDx,dy,invDz)=(" + invDx.ToString("0.###") + "," + dy.ToString("0.###") + "," + invDz.ToString("0.###") + ")");
 
             var translated = baseline.Clone();
             translated.Translate(invDx, dy, invDz);
