@@ -166,11 +166,6 @@ namespace MoveDoors
             BlockPos pos = AccessTools.Property(type, "Pos")?.GetValue(__instance) as BlockPos;
             if (pos == null) return;
 
-            // STOP mutating the BE's mesh — we now apply the offset via the renderer's
-            // CustomTransform matrix instead. This is applied by the renderer as part of the
-            // normal render pipeline, so the offset rides along with all of VS's existing
-            // rotation/animation matrices and lands in world space matching the hitbox.
-
             var animUtilField = AccessTools.Field(type, "animUtil");
             var animUtil = animUtilField?.GetValue(__instance);
             if (animUtil == null) return;
@@ -179,30 +174,24 @@ namespace MoveDoors
             var renderer = rendererField?.GetValue(animUtil);
             if (renderer == null) return;
 
-            var customField = AccessTools.Field(renderer.GetType(), "CustomTransform");
-            if (customField == null) return;
+            // Shift the renderer's world-space position by our offset. The renderer draws the
+            // door at this position, and all of VS's rotation / animation / scale transforms
+            // happen relative to it — so the entire visible door rides along, naturally matching
+            // the hitbox for closed AND open states.
+            var posField = AccessTools.Field(renderer.GetType(), "pos");
+            if (posField == null) return;
 
             var off = MoveDoorsModSystem.Offsets?.Get(pos);
             bool hasOffset = off != null && (off.X != 0 || off.Y != 0 || off.Z != 0);
 
-            if (!hasOffset)
-            {
-                customField.SetValue(renderer, null);
-                return;
-            }
+            Vec3d target = hasOffset
+                ? new Vec3d(pos.X + off.X / 16.0, pos.Y + off.Y / 16.0, pos.Z + off.Z / 16.0)
+                : new Vec3d(pos.X, pos.Y, pos.Z);
 
-            float dx = off.X / 16f;
-            float dy = off.Y / 16f;
-            float dz = off.Z / 16f;
+            posField.SetValue(renderer, target);
 
-            // 4x4 translation matrix, column-major (OpenGL convention).
-            customField.SetValue(renderer, new float[]
-            {
-                1, 0, 0, 0,
-                0, 1, 0, 0,
-                0, 0, 1, 0,
-                dx, dy, dz, 1
-            });
+            MoveDoorsModSystem.Logger?.Notification("[movedoors] set renderer.pos = " + target
+                + " (block at " + pos + ", offset " + (off?.ToString() ?? "none") + ")");
         }
     }
 }
