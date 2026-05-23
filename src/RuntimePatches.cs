@@ -170,13 +170,27 @@ namespace MoveDoors
                 baselineMeshes[key] = baseline;
             }
 
-            // VS 1.22 door meshes use a coordinate scale where translation amounts in
-            // mesh-local units land at HALF the world distance after rendering. Empirically
-            // confirmed: a 1/16 mesh translation moved the visual 1/32 of a block, while the
-            // cuboid translation moved the hitbox the full 1/16. Doubling the mesh translation
-            // (divide by 8 instead of 16) puts visual and hitbox at the same world position.
+            // Mesh-local translation amount: doubled (/8 instead of /16) because VS's door render
+            // pipeline halves the effective translation magnitude — empirically confirmed in the
+            // closed state.
+            float dx = off.X / 8f;
+            float dy = off.Y / 8f;
+            float dz = off.Z / 8f;
+
+            // Inverse-rotate by the door's current Y-axis angle so that after the renderer's
+            // forward rotation (RotateYRad, which is non-zero in the open state and during the
+            // swing animation), the visual ends up at the same world position as the hitbox.
+            // For closed state (RotateYRad ≈ 0) this reduces to identity, matching v0.3.13's
+            // working closed-state behavior.
+            var rotateField = AccessTools.Field(type, "RotateYRad");
+            float angle = rotateField?.GetValue(__instance) is float r ? r : 0f;
+            float cos = (float)Math.Cos(angle);
+            float sin = (float)Math.Sin(angle);
+            float invDx = dx * cos - dz * sin;
+            float invDz = dx * sin + dz * cos;
+
             var translated = baseline.Clone();
-            translated.Translate(off.X / 8f, off.Y / 8f, off.Z / 8f);
+            translated.Translate(invDx, dy, invDz);
             meshField.SetValue(__instance, translated);
         }
     }
