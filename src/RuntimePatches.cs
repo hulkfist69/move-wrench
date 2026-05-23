@@ -111,33 +111,36 @@ namespace MoveDoors
                 }
             }
 
-            // ----- BE.mesh translation (closed-state chunk batch path) -----
-            // Only do this when the door is in the CLOSED state, so the open mesh isn't
-            // double-shifted (open uses renderer.pos above). Defensive: never write a null or
-            // zero-vertex mesh back to the field.
-            if (!opened)
+            // ----- BE.mesh translation -----
+            // Cache the BE's mesh per (pos, state) as a baseline. On every postfix call, restore
+            // the appropriate baseline before deciding whether to translate. This prevents stale
+            // CLOSED-translated meshes from sticking around when the door state changes to OPEN
+            // (which would otherwise leave the renderer drawing the closed-shape mesh under the
+            // open rotation, looking like the door didn't toggle).
+            var meshField = AccessTools.Field(type, "mesh");
+            if (meshField?.GetValue(behavior) is MeshData currentMesh && currentMesh.VerticesCount > 0)
             {
-                var meshField = AccessTools.Field(type, "mesh");
-                if (meshField?.GetValue(behavior) is MeshData currentMesh && currentMesh.VerticesCount > 0)
-                {
-                    string closedKey = pos.X + ":" + pos.Y + ":" + pos.Z + ":closed";
-                    if (!baselineMeshes.TryGetValue(closedKey, out var baseline) || baseline == null || baseline.VerticesCount == 0)
-                    {
-                        baseline = currentMesh.Clone();
-                        baselineMeshes[closedKey] = baseline;
-                    }
+                string stateKey = pos.X + ":" + pos.Y + ":" + pos.Z + ":" + (opened ? "open" : "closed");
 
-                    if (hasOffset)
-                    {
-                        var translated = baseline.Clone();
-                        translated.Translate(off.X / 8f, off.Y / 8f, off.Z / 8f);
-                        if (translated.VerticesCount > 0) meshField.SetValue(behavior, translated);
-                    }
-                    else
-                    {
-                        var fresh = baseline.Clone();
-                        if (fresh.VerticesCount > 0) meshField.SetValue(behavior, fresh);
-                    }
+                if (!baselineMeshes.TryGetValue(stateKey, out var baseline) || baseline == null || baseline.VerticesCount == 0)
+                {
+                    baseline = currentMesh.Clone();
+                    baselineMeshes[stateKey] = baseline;
+                }
+
+                // For CLOSED + offset: translate baseline by offset, install translated mesh.
+                // For everything else (closed/no-offset OR open/any): restore the baseline mesh
+                // untranslated so renderer.pos + animation rotation can render it correctly.
+                if (!opened && hasOffset)
+                {
+                    var translated = baseline.Clone();
+                    translated.Translate(off.X / 8f, off.Y / 8f, off.Z / 8f);
+                    if (translated.VerticesCount > 0) meshField.SetValue(behavior, translated);
+                }
+                else
+                {
+                    var fresh = baseline.Clone();
+                    if (fresh.VerticesCount > 0) meshField.SetValue(behavior, fresh);
                 }
             }
         }
