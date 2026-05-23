@@ -84,4 +84,21 @@ namespace MoveDoors
             MoveDoorsModSystem.Offsets?.OnBlockRemoved(pos);
         }
     }
+
+    // Belt-and-braces: any time a block is placed, if there's a stored offset at that position,
+    // clear it. Covers chunk-unload, /editmode replace, fill commands, and any removal path
+    // that didn't run through OnBlockBroken.
+    [HarmonyPatch(typeof(Block), nameof(Block.OnBlockPlaced))]
+    public static class Patch_Block_OnBlockPlaced
+    {
+        public static void Postfix(IWorldAccessor world, BlockPos blockPos)
+        {
+            if (world?.Side != EnumAppSide.Server) return;
+            if (blockPos == null) return;
+            if (MoveDoorsModSystem.Offsets?.Get(blockPos) != null)
+            {
+                MoveDoorsModSystem.Offsets.OnBlockRemoved(blockPos);
+            }
+        }
+    }
 }

@@ -23,7 +23,7 @@ namespace MoveDoors
         public static int GetClientStep() => clientStep;
         public static void SetClientStep(int s)
         {
-            if (s == 1 || s == 2 || s == 4 || s == 8) clientStep = s;
+            if (s == 1 || s == 2 || s == 4) clientStep = s;
         }
 
         public override void Start(ICoreAPI api)

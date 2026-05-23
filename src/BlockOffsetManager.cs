@@ -140,7 +140,7 @@ namespace MoveDoors
             }
         }
 
-        private static int ClampStep(int s) => s == 1 || s == 2 || s == 4 || s == 8 ? s : 1;
+        private static int ClampStep(int s) => s == 1 || s == 2 || s == 4 ? s : 1;
 
         private List<BlockPos> CollectGroup(BlockPos pos, Block block)
         {

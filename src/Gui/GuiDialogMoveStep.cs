@@ -9,7 +9,7 @@ namespace MoveDoors
     {
         public override string ToggleKeyCombinationCode => "movedoors:stepmode";
 
-        private static readonly int[] Steps = { 1, 2, 4, 8 };
+        private static readonly int[] Steps = { 1, 2, 4 };
 
         public GuiDialogMoveStep(ICoreClientAPI capi) : base(capi)
         {
