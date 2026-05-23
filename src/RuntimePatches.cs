@@ -473,6 +473,19 @@ namespace MoveDoors
 
                 if (bestNew != null)
                 {
+                    // Only overwrite if VS's current selection isn't already targeting THIS door.
+                    // Constant per-frame overwriting was causing double-fire of click events.
+                    if (cur?.Position != null
+                        && cur.Position.X == bestNew.Position.X
+                        && cur.Position.Y == bestNew.Position.Y
+                        && cur.Position.Z == bestNew.Position.Z)
+                    {
+                        bestNew = null;
+                    }
+                }
+
+                if (bestNew != null)
+                {
                     if (!selectionFieldResolved)
                     {
                         selectionFieldResolved = true;
